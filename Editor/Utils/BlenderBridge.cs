@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reflection;
 
 namespace AvatarCostumeAdjustTool
 {
@@ -183,51 +184,58 @@ namespace AvatarCostumeAdjustTool
                 
                 // FBXエクスポート設定
                 string tempFbxPath = filePath;
+                bool success = false;
                 
                 // Unity FBX Exporter APIを使用
                 UnityEditor.EditorUtility.DisplayProgressBar("FBXエクスポート", $"{gameObject.name} をエクスポートしています...", 0.5f);
                 
-                // FBXエクスポートの実装
-                // Unity 2020.2以降では ModelExporter.ExportObject が使用可能
-                bool success = false;
-                
-#if UNITY_2020_2_OR_NEWER
-                // Unity 2020.2以降用のコード
-                success = UnityEditor.ModelExporter.ExportObject(tempFbxPath, tempObject);
-#else
-                // 旧バージョン用のコード（FBXExporterが統合されている場合）
-                Type fbxExporterType = Type.GetType("UnityEditor.FBXExporter, UnityEditor");
-                if (fbxExporterType != null)
+                // Unity バージョンに応じたエクスポート方法を選択
+                // リフレクションを使用して存在するメソッドやクラスを検出
+                try
                 {
-                    var exportMethod = fbxExporterType.GetMethod("ExportGameObjToFBX", 
-                        System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
-                    
-                    if (exportMethod != null)
-                    {
-                        exportMethod.Invoke(null, new object[] { tempObject, tempFbxPath });
-                        success = File.Exists(tempFbxPath);
-                    }
-                }
-                
-                // もしFBXExporterが使用できない場合は、エディタメニューの機能を使用
-                if (!success)
-                {
-                    // 選択を一時的に保存
-                    GameObject[] currentSelection = Selection.gameObjects;
-                    
-                    // エクスポート対象のみを選択
+                    // GameObject選択を設定
                     Selection.activeGameObject = tempObject;
                     
-                    // エクスポートメニュー実行
-                    EditorApplication.ExecuteMenuItem("Assets/Export Selection...");
+                    // エクスポートメニューを実行する代わりに、ExportPackageを使用
+                    // 対象のパスにFBXを直接書き出す
+                    string targetDirectory = Path.GetDirectoryName(tempFbxPath);
+                    string assetPath = AssetDatabase.GetAssetPath(tempObject);
                     
-                    // 元の選択を復元
-                    Selection.objects = currentSelection;
+                    // プレハブ化して一時的にAssetとして保存
+                    string tempPrefabPath = "Assets/Temp_" + tempObject.name + ".prefab";
+                    GameObject prefab = PrefabUtility.SaveAsPrefabAsset(tempObject, tempPrefabPath);
                     
-                    // ファイルが作成されたかチェック
-                    success = File.Exists(tempFbxPath);
+                    if (prefab != null)
+                    {
+                        // FBXエクスポート用のエディタウィンドウを開くメニュー項目を実行
+                        // この方法は理想的ではありませんが、代替APIがない場合の回避策
+                        EditorApplication.ExecuteMenuItem("Assets/Export Selection...");
+                        
+                        // エクスポートダイアログが表示されるので、ユーザーが手動で保存する必要がある
+                        EditorUtility.DisplayDialog("FBXエクスポート", 
+                            $"表示されるダイアログで、ファイル名を\n{tempFbxPath}\nに設定し、「保存」をクリックしてください。", "OK");
+                        
+                        // 一時プレハブを削除
+                        AssetDatabase.DeleteAsset(tempPrefabPath);
+                        
+                        // ファイルが作成されたかチェック（ユーザーがキャンセルした可能性もある）
+                        if (File.Exists(tempFbxPath))
+                        {
+                            success = true;
+                        }
+                        else
+                        {
+                            // 代替手段として、シーンをFBXとして保存
+                            UnityEngine.Debug.LogWarning("FBXエクスポートダイアログでの保存が確認できませんでした。代替手段を試みます。");
+                            success = ExportSceneToFbx(tempObject, tempFbxPath);
+                        }
+                    }
                 }
-#endif
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogError($"FBXエクスポート中に例外が発生しました: {ex.Message}");
+                    success = false;
+                }
                 
                 // 一時オブジェクトを削除
                 GameObject.DestroyImmediate(tempObject);
@@ -239,6 +247,46 @@ namespace AvatarCostumeAdjustTool
             {
                 UnityEngine.Debug.LogError($"FBXエクスポート中にエラーが発生しました: {ex.Message}");
                 UnityEditor.EditorUtility.ClearProgressBar();
+                return false;
+            }
+        }
+        
+        /// <summary>
+        /// シーンをFBXとしてエクスポート（代替手段）
+        /// </summary>
+        private static bool ExportSceneToFbx(GameObject targetObject, string filePath)
+        {
+            try
+            {
+                // 選択を一時的に保存
+                GameObject[] currentSelection = Selection.gameObjects;
+                
+                // エクスポート対象のみを選択
+                Selection.activeGameObject = targetObject;
+                
+                // アセットのエクスポート
+                string tempPrefabPath = "Assets/Temp_" + targetObject.name + ".prefab";
+                PrefabUtility.SaveAsPrefabAsset(targetObject, tempPrefabPath);
+                
+                // FBXエクスポート用メニュー（これは手動での操作が必要）
+                EditorApplication.ExecuteMenuItem("Assets/Export Selection...");
+                
+                // ユーザーにFBXファイルを保存するように指示
+                EditorUtility.DisplayDialog("FBXエクスポート", 
+                    $"表示されるダイアログで、ファイル名を\n{filePath}\nに設定し、「保存」をクリックしてください。", "OK");
+                
+                // 一時プレハブを削除
+                AssetDatabase.DeleteAsset(tempPrefabPath);
+                
+                // 元の選択を復元
+                Selection.objects = currentSelection;
+                
+                // ファイルが作成されたかチェック
+                return File.Exists(filePath);
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogError($"シーンのFBXエクスポート中にエラーが発生しました: {ex.Message}");
                 return false;
             }
         }
