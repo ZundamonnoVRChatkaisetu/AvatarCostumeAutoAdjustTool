@@ -31,6 +31,10 @@ namespace AvatarCostumeAdjustTool
         public MappingMethod method;       // マッピング方法
         public bool isManuallyMapped;      // 手動でマッピングされたかどうか
         
+        // パスプロパティの追加（PreviewManager用）
+        public string AvatarBonePath { get; set; }
+        public string CostumeBonePath { get; set; }
+        
         // 保存用のコンストラクタ
         public BoneMapping() { }
         
@@ -53,6 +57,9 @@ namespace AvatarCostumeAdjustTool
     {
         // マッピングリスト
         private List<BoneMapping> mappings = new List<BoneMapping>();
+        
+        // PreviewManager用のプロパティ
+        public List<BoneMapping> BoneMappings { get { return mappings; } }
         
         // 除外ボーンリスト
         private HashSet<string> excludedAvatarBoneIds = new HashSet<string>();
