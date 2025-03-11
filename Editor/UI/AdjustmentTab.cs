@@ -89,7 +89,8 @@ namespace AvatarCostumeAdjustTool
             if (errorMessage != null && EditorApplication.timeSinceStartup - errorDisplayStartTime > ERROR_DISPLAY_DURATION)
             {
                 errorMessage = null;
-                EditorApplication.RepaintAllViews();
+                SceneView.RepaintAll();
+                EditorWindow.GetWindow<AvatarCostumeAdjustTool>().Repaint();
             }
         }
         
