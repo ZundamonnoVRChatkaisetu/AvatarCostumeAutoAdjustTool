@@ -97,6 +97,14 @@ namespace AvatarCostumeAdjustTool
             return new Vector3(offsetX, offsetY, offsetZ);
         }
         
+        /// <summary>
+        /// 自身のディープコピーを作成
+        /// </summary>
+        public BodyPartAdjustment Clone()
+        {
+            return new BodyPartAdjustment(this);
+        }
+        
         // バインドポーズやスケールを調整するときに使用する最終スケール値
         public Vector3 scaleMultiplier { get { return GetScaleVector(); } }
         
@@ -239,6 +247,14 @@ namespace AvatarCostumeAdjustTool
         }
         
         /// <summary>
+        /// 自身のディープコピーを作成
+        /// </summary>
+        public AdjustmentSettings Clone()
+        {
+            return new AdjustmentSettings(this);
+        }
+        
+        /// <summary>
         /// 部位別調整を初期化
         /// </summary>
         private void InitializeBodyPartAdjustments()
@@ -333,6 +349,78 @@ namespace AvatarCostumeAdjustTool
             
             presetName = "";
             presetDescription = "";
+        }
+        
+        /// <summary>
+        /// 別の設定から値をコピーする
+        /// </summary>
+        public void CopyValuesFrom(AdjustmentSettings other)
+        {
+            if (other == null) return;
+            
+            this.method = other.method;
+            this.globalScale = other.globalScale;
+            
+            this.upperBodyOffsetX = other.upperBodyOffsetX;
+            this.upperBodyOffsetY = other.upperBodyOffsetY;
+            this.upperBodyOffsetZ = other.upperBodyOffsetZ;
+            
+            this.lowerBodyOffsetX = other.lowerBodyOffsetX;
+            this.lowerBodyOffsetY = other.lowerBodyOffsetY;
+            this.lowerBodyOffsetZ = other.lowerBodyOffsetZ;
+            
+            this.leftArmScale = other.leftArmScale;
+            this.rightArmScale = other.rightArmScale;
+            
+            this.leftLegScale = other.leftLegScale;
+            this.rightLegScale = other.rightLegScale;
+            
+            this.PositionOffset = other.PositionOffset;
+            this.RotationOffset = other.RotationOffset;
+            
+            this.presetName = other.presetName;
+            this.presetDescription = other.presetDescription;
+            
+            // 高度なオプションのコピー
+            this.adjustScale = other.adjustScale;
+            this.adjustRotation = other.adjustRotation;
+            this.adjustBindPoses = other.adjustBindPoses;
+            this.detectStructuralDifferences = other.detectStructuralDifferences;
+            this.redistributeWeights = other.redistributeWeights;
+            this.confidenceThreshold = other.confidenceThreshold;
+            this.useAdvancedOptions = other.useAdvancedOptions;
+            this.forceUpdateBindPoses = other.forceUpdateBindPoses;
+            this.maintainBoneHierarchy = other.maintainBoneHierarchy;
+            this.positionTolerance = other.positionTolerance;
+            
+            // 部位別調整のコピー
+            foreach (var kvp in other.bodyPartAdjustments)
+            {
+                if (this.bodyPartAdjustments.ContainsKey(kvp.Key))
+                {
+                    var thisAdjustment = this.bodyPartAdjustments[kvp.Key];
+                    var otherAdjustment = kvp.Value;
+                    
+                    thisAdjustment.scaleX = otherAdjustment.scaleX;
+                    thisAdjustment.scaleY = otherAdjustment.scaleY;
+                    thisAdjustment.scaleZ = otherAdjustment.scaleZ;
+                    thisAdjustment.offsetX = otherAdjustment.offsetX;
+                    thisAdjustment.offsetY = otherAdjustment.offsetY;
+                    thisAdjustment.offsetZ = otherAdjustment.offsetZ;
+                    thisAdjustment.rotation = otherAdjustment.rotation;
+                    thisAdjustment.isEnabled = otherAdjustment.isEnabled;
+                    thisAdjustment.useCustomSettings = otherAdjustment.useCustomSettings;
+                    thisAdjustment.adjustScale = otherAdjustment.adjustScale;
+                    thisAdjustment.adjustPosition = otherAdjustment.adjustPosition;
+                    thisAdjustment.adjustRotation = otherAdjustment.adjustRotation;
+                }
+                else
+                {
+                    var adjustment = new BodyPartAdjustment(kvp.Value);
+                    this.bodyPartAdjustments[kvp.Key] = adjustment;
+                    this.bodyPartAdjustmentsList.Add(adjustment);
+                }
+            }
         }
     }
 }
