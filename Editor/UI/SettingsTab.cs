@@ -34,9 +34,20 @@ namespace AvatarCostumeAdjustTool
         private float deformationSmoothness = 0.5f;
         private bool preserveVolume = true;
         
+        // ボーン構成差異対応設定
+        private bool detectStructuralDifferences = true;
+        private bool redistributeWeights = true; 
+        private bool adjustRotation = true;
+        private bool adjustScale = true;
+        private bool adjustBindPoses = true;
+        private bool forceUpdateBindPoses = false;
+        private bool maintainBoneHierarchy = true;
+        private float confidenceThreshold = 0.3f;
+        
         // エディタスタイル
         private GUIStyle headerStyle;
         private GUIStyle subHeaderStyle;
+        private bool showBoneStructureSettings = false;
         
         /// <summary>
         /// GUIの描画
@@ -54,6 +65,9 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.Space(10);
             
             DrawMeshAdjustmentSettings();
+            EditorGUILayout.Space(10);
+            
+            DrawBoneStructureSettings();
             EditorGUILayout.Space(10);
             
             DrawAdvancedSettings();
@@ -222,6 +236,69 @@ namespace AvatarCostumeAdjustTool
         }
         
         /// <summary>
+        /// ボーン構造差異対応設定セクションの描画
+        /// </summary>
+        private void DrawBoneStructureSettings()
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            
+            // 折りたたみヘッダー
+            showBoneStructureSettings = EditorGUILayout.Foldout(showBoneStructureSettings, "ボーン構造差異対応設定", true, EditorStyles.foldoutHeader);
+            
+            if (showBoneStructureSettings)
+            {
+                EditorGUILayout.HelpBox("アバターと衣装のボーン構成が異なる場合の調整設定です。", MessageType.Info);
+                
+                EditorGUILayout.Space(5);
+                
+                EditorGUILayout.LabelField("基本設定", subHeaderStyle);
+                
+                detectStructuralDifferences = EditorGUILayout.Toggle("ボーン構造差異の自動検出", detectStructuralDifferences);
+                
+                EditorGUI.indentLevel++;
+                
+                if (detectStructuralDifferences)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("信頼度しきい値", GUILayout.Width(150));
+                    confidenceThreshold = EditorGUILayout.Slider(confidenceThreshold, 0f, 1f);
+                    EditorGUILayout.EndHorizontal();
+                    
+                    EditorGUILayout.HelpBox("この値が低いほど多くのボーンがマッピングされますが、精度が低下する可能性があります。", MessageType.Info);
+                }
+                
+                EditorGUI.indentLevel--;
+                
+                EditorGUILayout.Space(5);
+                
+                EditorGUILayout.LabelField("調整項目", subHeaderStyle);
+                
+                adjustScale = EditorGUILayout.Toggle("スケール調整を適用", adjustScale);
+                adjustRotation = EditorGUILayout.Toggle("回転調整を適用", adjustRotation);
+                adjustBindPoses = EditorGUILayout.Toggle("バインドポーズ調整を適用", adjustBindPoses);
+                redistributeWeights = EditorGUILayout.Toggle("スキンウェイト再分配を適用", redistributeWeights);
+                
+                if (redistributeWeights)
+                {
+                    EditorGUILayout.HelpBox("スキンウェイトの再分配はメッシュの読み取り権限が必要です。プロジェクト設定で「Read/Write Enabled」が有効になっていることを確認してください。", MessageType.Info);
+                }
+                
+                EditorGUILayout.Space(5);
+                
+                EditorGUILayout.LabelField("高度な設定", subHeaderStyle);
+                maintainBoneHierarchy = EditorGUILayout.Toggle("ボーン階層構造を維持", maintainBoneHierarchy);
+                forceUpdateBindPoses = EditorGUILayout.Toggle("バインドポーズを強制更新", forceUpdateBindPoses);
+                
+                if (forceUpdateBindPoses)
+                {
+                    EditorGUILayout.HelpBox("この設定は問題がある場合にのみ有効にしてください。通常は自動検出で十分です。", MessageType.Warning);
+                }
+            }
+            
+            EditorGUILayout.EndVertical();
+        }
+        
+        /// <summary>
         /// 高度な設定セクションの描画
         /// </summary>
         private void DrawAdvancedSettings()
@@ -337,7 +414,17 @@ namespace AvatarCostumeAdjustTool
                 // メッシュ調整設定
                 meshSamplingDensity = this.meshSamplingDensity,
                 deformationSmoothness = this.deformationSmoothness,
-                preserveVolume = this.preserveVolume
+                preserveVolume = this.preserveVolume,
+                
+                // ボーン構造差異対応設定
+                detectStructuralDifferences = this.detectStructuralDifferences,
+                redistributeWeights = this.redistributeWeights,
+                adjustRotation = this.adjustRotation,
+                adjustScale = this.adjustScale,
+                adjustBindPoses = this.adjustBindPoses,
+                forceUpdateBindPoses = this.forceUpdateBindPoses,
+                maintainBoneHierarchy = this.maintainBoneHierarchy,
+                confidenceThreshold = this.confidenceThreshold
             };
             
             try
@@ -356,7 +443,7 @@ namespace AvatarCostumeAdjustTool
         /// <summary>
         /// 設定の読み込み
         /// </summary>
-        private void LoadSettings()
+        public void LoadSettings()
         {
             try
             {
@@ -384,6 +471,24 @@ namespace AvatarCostumeAdjustTool
                     this.meshSamplingDensity = settings.meshSamplingDensity;
                     this.deformationSmoothness = settings.deformationSmoothness;
                     this.preserveVolume = settings.preserveVolume;
+                    
+                    // ボーン構造差異対応設定（存在する場合のみ読み込み - 後方互換性のため）
+                    if (settings.detectStructuralDifferences.HasValue)
+                        this.detectStructuralDifferences = settings.detectStructuralDifferences.Value;
+                    if (settings.redistributeWeights.HasValue)
+                        this.redistributeWeights = settings.redistributeWeights.Value;
+                    if (settings.adjustRotation.HasValue)
+                        this.adjustRotation = settings.adjustRotation.Value;
+                    if (settings.adjustScale.HasValue)
+                        this.adjustScale = settings.adjustScale.Value;
+                    if (settings.adjustBindPoses.HasValue)
+                        this.adjustBindPoses = settings.adjustBindPoses.Value;
+                    if (settings.forceUpdateBindPoses.HasValue)
+                        this.forceUpdateBindPoses = settings.forceUpdateBindPoses.Value;
+                    if (settings.maintainBoneHierarchy.HasValue)
+                        this.maintainBoneHierarchy = settings.maintainBoneHierarchy.Value;
+                    if (settings.confidenceThreshold.HasValue)
+                        this.confidenceThreshold = settings.confidenceThreshold.Value;
                     
                     Debug.Log("設定を読み込みました: " + settingsPath);
                 }
@@ -424,8 +529,36 @@ namespace AvatarCostumeAdjustTool
                 deformationSmoothness = 0.5f;
                 preserveVolume = true;
                 
+                // ボーン構造差異対応設定
+                detectStructuralDifferences = true;
+                redistributeWeights = true;
+                adjustRotation = true;
+                adjustScale = true;
+                adjustBindPoses = true;
+                forceUpdateBindPoses = false;
+                maintainBoneHierarchy = true;
+                confidenceThreshold = 0.3f;
+                
                 Debug.Log("すべての設定をリセットしました。");
             }
+        }
+        
+        /// <summary>
+        /// ボーン構造対応設定をAdjustmentSettingsに適用
+        /// </summary>
+        public void ApplySettingsToAdjustment(AdjustmentSettings adjustmentSettings)
+        {
+            if (adjustmentSettings == null)
+                return;
+                
+            adjustmentSettings.adjustScale = this.adjustScale;
+            adjustmentSettings.adjustRotation = this.adjustRotation;
+            adjustmentSettings.adjustBindPoses = this.adjustBindPoses;
+            adjustmentSettings.detectStructuralDifferences = this.detectStructuralDifferences;
+            adjustmentSettings.redistributeWeights = this.redistributeWeights;
+            adjustmentSettings.confidenceThreshold = this.confidenceThreshold;
+            adjustmentSettings.forceUpdateBindPoses = this.forceUpdateBindPoses;
+            adjustmentSettings.maintainBoneHierarchy = this.maintainBoneHierarchy;
         }
         
         /// <summary>
@@ -481,5 +614,15 @@ namespace AvatarCostumeAdjustTool
         public int meshSamplingDensity;
         public float deformationSmoothness;
         public bool preserveVolume;
+        
+        // ボーン構造差異対応設定（後方互換性のためにnullable型を使用）
+        public bool? detectStructuralDifferences;
+        public bool? redistributeWeights;
+        public bool? adjustRotation;
+        public bool? adjustScale;
+        public bool? adjustBindPoses;
+        public bool? forceUpdateBindPoses;
+        public bool? maintainBoneHierarchy;
+        public float? confidenceThreshold;
     }
 }
