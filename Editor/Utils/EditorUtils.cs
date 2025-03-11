@@ -220,6 +220,34 @@ namespace AvatarCostumeAdjustTool
         }
 
         /// <summary>
+        /// ワイヤーメッシュを描画するメソッド (DrawWireMesh の代替)
+        /// </summary>
+        public static void DrawWireMesh(Mesh mesh, Matrix4x4 matrix, Color color)
+        {
+            WithHandlesColor(color, () =>
+            {
+                // 頂点のインデックスを取得
+                int[] triangles = mesh.triangles;
+                Vector3[] vertices = mesh.vertices;
+                
+                // 三角形の各辺を描画
+                for (int i = 0; i < triangles.Length; i += 3)
+                {
+                    if (i + 2 < triangles.Length)
+                    {
+                        Vector3 v1 = matrix.MultiplyPoint(vertices[triangles[i]]);
+                        Vector3 v2 = matrix.MultiplyPoint(vertices[triangles[i + 1]]);
+                        Vector3 v3 = matrix.MultiplyPoint(vertices[triangles[i + 2]]);
+                        
+                        Handles.DrawLine(v1, v2);
+                        Handles.DrawLine(v2, v3);
+                        Handles.DrawLine(v3, v1);
+                    }
+                }
+            });
+        }
+
+        /// <summary>
         /// ボーン間の接続関係を描画
         /// </summary>
         public static void DrawBoneConnections(Transform root)
