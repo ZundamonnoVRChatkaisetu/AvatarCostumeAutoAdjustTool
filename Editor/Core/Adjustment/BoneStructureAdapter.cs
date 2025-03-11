@@ -27,10 +27,27 @@ namespace AvatarCostumeAdjustTool
                 return;
             }
 
+            // 衣装のトランスフォーム情報の保存
+            Dictionary<string, TransformData> originalTransforms = new Dictionary<string, TransformData>();
+            
+            // すべての衣装ボーンの元の状態を保存
+            Transform[] costumeTransforms = costumeObject.GetComponentsInChildren<Transform>(true);
+            foreach(var transform in costumeTransforms)
+            {
+                string path = GetTransformPath(costumeObject.transform, transform);
+                originalTransforms[path] = new TransformData(
+                    transform.localPosition,
+                    transform.localRotation,
+                    transform.localScale
+                );
+            }
+
             // 衣装内のすべてのスキンメッシュレンダラーを取得
             SkinnedMeshRenderer[] renderers = costumeObject.GetComponentsInChildren<SkinnedMeshRenderer>();
 
             int successCount = 0;
+            bool hasStructuralDifferences = false;
+
             foreach (var renderer in renderers)
             {
                 if (renderer == null || renderer.sharedMesh == null)
@@ -38,7 +55,11 @@ namespace AvatarCostumeAdjustTool
 
                 try 
                 {
-                    AdaptSkinnedMeshToNewBoneStructure(renderer, avatarObject, avatarBones, costumeBones, mappingData);
+                    bool hasDifference = AdaptSkinnedMeshToNewBoneStructure(renderer, avatarObject, avatarBones, costumeBones, mappingData);
+                    if (hasDifference)
+                    {
+                        hasStructuralDifferences = true;
+                    }
                     successCount++;
                 }
                 catch (Exception ex)
@@ -47,13 +68,19 @@ namespace AvatarCostumeAdjustTool
                 }
             }
 
-            Debug.Log($"ボーン構造適応処理が完了しました。{successCount}/{renderers.Length} のスキンメッシュを処理しました。");
+            // ボーン構造差異がある場合のスケール調整
+            if (hasStructuralDifferences)
+            {
+                AdjustCostumeScale(costumeObject, avatarObject, originalTransforms);
+            }
+
+            Debug.Log($"ボーン構造適応処理が完了しました。{successCount}/{renderers.Length} のスキンメッシュを処理しました。{(hasStructuralDifferences ? "ボーン構造の差異が検出され調整されました。" : "")}");
         }
 
         /// <summary>
         /// スキンメッシュを新しいボーン構造に適応させる
         /// </summary>
-        private static void AdaptSkinnedMeshToNewBoneStructure(
+        private static bool AdaptSkinnedMeshToNewBoneStructure(
             SkinnedMeshRenderer renderer,
             GameObject avatarObject,
             List<BoneData> avatarBones,
@@ -62,7 +89,7 @@ namespace AvatarCostumeAdjustTool
         {
             Mesh sharedMesh = renderer.sharedMesh;
             if (sharedMesh == null)
-                return;
+                return false;
 
             // 元のボーン配列とバインドポーズを取得
             Transform[] originalBones = renderer.bones;
@@ -71,7 +98,7 @@ namespace AvatarCostumeAdjustTool
             if (originalBones == null || originalBones.Length == 0 || 
                 originalBindPoses == null || originalBindPoses.Length == 0)
             {
-                return;
+                return false;
             }
 
             // ボーンマッピングの改善: ボーンパス情報も使用
@@ -231,6 +258,63 @@ namespace AvatarCostumeAdjustTool
             // 完了メッセージ
             Debug.Log($"スキンメッシュ「{sharedMesh.name}」を新しいボーン構造に適応させました。" + 
                       (hasStructuralDifferences ? "（ボーン階層の違いを検出して調整しました）" : ""));
+
+            return hasStructuralDifferences;
+        }
+
+        /// <summary>
+        /// ボーン構造差異がある場合のスケール調整を行う
+        /// </summary>
+        private static void AdjustCostumeScale(
+            GameObject costumeObject, 
+            GameObject avatarObject,
+            Dictionary<string, TransformData> originalTransforms)
+        {
+            // アバターと衣装の全体的なサイズ比率を計算
+            Bounds avatarBounds = CalculateBounds(avatarObject);
+            Bounds costumeBounds = CalculateBounds(costumeObject);
+            
+            // アバターに対する衣装の比率を計算（極端な値は調整）
+            float scaleRatio = avatarBounds.size.magnitude / Mathf.Max(costumeBounds.size.magnitude, 0.01f);
+            scaleRatio = Mathf.Clamp(scaleRatio, 0.5f, 2.0f); // 極端な値を防止
+            
+            // スケール比率が妥当かチェック（あまりにも極端な場合はデフォルト値に）
+            if (float.IsNaN(scaleRatio) || float.IsInfinity(scaleRatio))
+            {
+                scaleRatio = 1.0f;
+            }
+            
+            // 直接ルートスケールを適用（個別ボーンのスケールは維持）
+            costumeObject.transform.localScale = new Vector3(
+                costumeObject.transform.localScale.x * scaleRatio,
+                costumeObject.transform.localScale.y * scaleRatio,
+                costumeObject.transform.localScale.z * scaleRatio
+            );
+            
+            Debug.Log($"衣装のスケールを自動調整しました (比率: {scaleRatio:F2})");
+        }
+
+        /// <summary>
+        /// バウンディングボックスを計算するヘルパーメソッド
+        /// </summary>
+        private static Bounds CalculateBounds(GameObject obj)
+        {
+            Bounds bounds = new Bounds(obj.transform.position, Vector3.zero);
+            Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
+            
+            // レンダラーがない場合は初期値を設定
+            if (renderers.Length == 0)
+            {
+                bounds.size = new Vector3(1, 1, 1);
+                return bounds;
+            }
+            
+            foreach(Renderer renderer in renderers)
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+            
+            return bounds;
         }
 
         /// <summary>
@@ -243,7 +327,7 @@ namespace AvatarCostumeAdjustTool
 
             foreach (var transform in transforms)
             {
-                string path = GetTransformPath(transform, obj.transform);
+                string path = GetTransformPath(obj.transform, transform);
                 boneDict[path] = transform;
 
                 // 正規化されたボーン名も追加（大文字小文字を区別せず、アンダースコアなどを除去）
@@ -293,7 +377,7 @@ namespace AvatarCostumeAdjustTool
         /// <summary>
         /// トランスフォームのパスを取得
         /// </summary>
-        private static string GetTransformPath(Transform transform, Transform root)
+        private static string GetTransformPath(Transform root, Transform transform)
         {
             if (transform == root)
                 return "";
@@ -301,7 +385,7 @@ namespace AvatarCostumeAdjustTool
             if (transform.parent == root)
                 return transform.name;
 
-            return GetTransformPath(transform.parent, root) + "/" + transform.name;
+            return GetTransformPath(root, transform.parent) + "/" + transform.name;
         }
 
         /// <summary>
@@ -664,6 +748,23 @@ namespace AvatarCostumeAdjustTool
 
             // 新しいウェイトをメッシュに設定
             mesh.boneWeights = newWeights;
+        }
+
+        /// <summary>
+        /// トランスフォームデータを保持するクラス
+        /// </summary>
+        private class TransformData
+        {
+            public Vector3 position;
+            public Quaternion rotation;
+            public Vector3 scale;
+            
+            public TransformData(Vector3 position, Quaternion rotation, Vector3 scale)
+            {
+                this.position = position;
+                this.rotation = rotation;
+                this.scale = scale;
+            }
         }
 
         /// <summary>
