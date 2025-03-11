@@ -30,13 +30,24 @@ namespace AvatarCostumeAdjustTool
             // 衣装内のすべてのスキンメッシュレンダラーを取得
             SkinnedMeshRenderer[] renderers = costumeObject.GetComponentsInChildren<SkinnedMeshRenderer>();
 
+            int successCount = 0;
             foreach (var renderer in renderers)
             {
                 if (renderer == null || renderer.sharedMesh == null)
                     continue;
 
-                AdaptSkinnedMeshToNewBoneStructure(renderer, avatarObject, avatarBones, costumeBones, mappingData);
+                try 
+                {
+                    AdaptSkinnedMeshToNewBoneStructure(renderer, avatarObject, avatarBones, costumeBones, mappingData);
+                    successCount++;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"スキンメッシュ '{renderer.name}' の適応処理中にエラーが発生しました: {ex.Message}");
+                }
             }
+
+            Debug.Log($"ボーン構造適応処理が完了しました。{successCount}/{renderers.Length} のスキンメッシュを処理しました。");
         }
 
         /// <summary>
@@ -63,6 +74,10 @@ namespace AvatarCostumeAdjustTool
                 return;
             }
 
+            // ボーンマッピングの改善: ボーンパス情報も使用
+            Dictionary<string, Transform> avatarBonesByPath = CreateBonePathDictionary(avatarObject);
+            Dictionary<string, Transform> costumeBonesByPath = CreateBonePathDictionary(renderer.gameObject);
+
             // 新しいボーン配列を作成
             Transform[] newBones = new Transform[originalBones.Length];
             Matrix4x4[] newBindPoses = new Matrix4x4[originalBindPoses.Length];
@@ -70,16 +85,35 @@ namespace AvatarCostumeAdjustTool
             // ボーンの変換マッピングを作成（インデックスベース）
             Dictionary<int, int> boneIndexMap = new Dictionary<int, int>();
             Dictionary<int, BoneTransformInfo> boneTransformMap = new Dictionary<int, BoneTransformInfo>();
+            Dictionary<Transform, Transform> directBoneMapping = new Dictionary<Transform, Transform>();
+
+            // マッピング情報をディクショナリに変換して高速アクセスできるようにする
+            Dictionary<string, string> boneIdMapping = CreateBoneIdMappingDictionary(mappingData);
 
             // ルートボーンの処理
-            Transform newRootBone = FindAppropriateAvatarBone(renderer.rootBone, avatarObject, avatarBones, costumeBones, mappingData);
+            Transform newRootBone = FindAppropriateAvatarBone(
+                renderer.rootBone, 
+                avatarObject, 
+                avatarBones, 
+                costumeBones, 
+                mappingData,
+                boneIdMapping,
+                avatarBonesByPath,
+                costumeBonesByPath);
+
             if (newRootBone != null)
             {
                 renderer.rootBone = newRootBone;
             }
+            else if (avatarObject != null)
+            {
+                // ルートボーンが見つからない場合はアバターのルートを使用
+                renderer.rootBone = avatarObject.transform;
+            }
 
             // 各ボーンの処理
             bool hasStructuralDifferences = false;
+            List<int> missingBoneIndices = new List<int>();
 
             for (int i = 0; i < originalBones.Length; i++)
             {
@@ -88,15 +122,25 @@ namespace AvatarCostumeAdjustTool
                 {
                     newBones[i] = null;
                     newBindPoses[i] = originalBindPoses[i];
+                    missingBoneIndices.Add(i);
                     continue;
                 }
 
                 // 対応するアバターボーンを検索
-                Transform newBone = FindAppropriateAvatarBone(originalBone, avatarObject, avatarBones, costumeBones, mappingData);
+                Transform newBone = FindAppropriateAvatarBone(
+                    originalBone, 
+                    avatarObject, 
+                    avatarBones, 
+                    costumeBones, 
+                    mappingData,
+                    boneIdMapping,
+                    avatarBonesByPath,
+                    costumeBonesByPath);
 
                 if (newBone != null)
                 {
                     newBones[i] = newBone;
+                    directBoneMapping[originalBone] = newBone;
 
                     // 元のボーンと新しいボーンの階層構造が異なる場合はフラグを立てる
                     if (IsStructurallyDifferent(originalBone, newBone))
@@ -114,9 +158,39 @@ namespace AvatarCostumeAdjustTool
                 }
                 else
                 {
-                    // マッピングが見つからない場合は元のボーンを使用
-                    newBones[i] = originalBone;
-                    newBindPoses[i] = originalBindPoses[i];
+                    // マッピングが見つからない場合
+                    Debug.LogWarning($"ボーン '{originalBone.name}' に対応するアバターボーンが見つかりませんでした。");
+                    missingBoneIndices.Add(i);
+                    
+                    // 階層的に最も近い親ボーンを探す
+                    Transform parentBone = originalBone.parent;
+                    Transform fallbackBone = null;
+                    
+                    while (parentBone != null && fallbackBone == null)
+                    {
+                        if (directBoneMapping.TryGetValue(parentBone, out Transform mappedParent))
+                        {
+                            fallbackBone = mappedParent;
+                            break;
+                        }
+                        parentBone = parentBone.parent;
+                    }
+                    
+                    if (fallbackBone == null)
+                    {
+                        // それでも見つからない場合はルートを使用
+                        fallbackBone = renderer.rootBone ?? avatarObject.transform;
+                    }
+                    
+                    newBones[i] = fallbackBone;
+                    hasStructuralDifferences = true;
+                    
+                    boneTransformMap[i] = new BoneTransformInfo
+                    {
+                        OriginalBone = originalBone,
+                        NewBone = fallbackBone,
+                        OriginalBindPose = originalBindPoses[i]
+                    };
                 }
             }
 
@@ -132,12 +206,17 @@ namespace AvatarCostumeAdjustTool
             }
 
             // スキンウェイトの再計算が必要かどうかを判断
-            bool needsWeightRedistribution = hasStructuralDifferences;
+            bool needsWeightRedistribution = hasStructuralDifferences || missingBoneIndices.Count > 0;
 
             // スキンウェイトの再分配が必要な場合
-            if (needsWeightRedistribution)
+            if (needsWeightRedistribution && sharedMesh.isReadable)
             {
-                RedistributeSkinnedMeshWeights(sharedMesh, originalBones, newBones);
+                RedistributeSkinnedMeshWeights(sharedMesh, originalBones, newBones, missingBoneIndices);
+            }
+            else if (needsWeightRedistribution && !sharedMesh.isReadable)
+            {
+                Debug.LogWarning($"メッシュ '{sharedMesh.name}' は読み取り可能ではないため、スキンウェイトの再分配ができません。" +
+                               "プロジェクト設定でメッシュの Read/Write Enabled オプションを有効にしてください。");
             }
 
             // 変更を適用
@@ -155,335 +234,72 @@ namespace AvatarCostumeAdjustTool
         }
 
         /// <summary>
-        /// 対応するアバターのボーンを検索する
+        /// オブジェクト内のすべてのボーンをパスをキーとして辞書化する
         /// </summary>
-        private static Transform FindAppropriateAvatarBone(
-            Transform costumeBone,
-            GameObject avatarObject,
-            List<BoneData> avatarBones,
-            List<BoneData> costumeBones,
-            MappingData mappingData)
+        private static Dictionary<string, Transform> CreateBonePathDictionary(GameObject obj)
         {
-            if (costumeBone == null)
-                return null;
+            Dictionary<string, Transform> boneDict = new Dictionary<string, Transform>();
+            Transform[] transforms = obj.GetComponentsInChildren<Transform>(true);
 
-            // 対応するボーンデータを探す
-            BoneData costumeBoneData = costumeBones.FirstOrDefault(b => b.transform == costumeBone);
-
-            if (costumeBoneData != null)
+            foreach (var transform in transforms)
             {
-                // マッピングからアバターボーンを取得
-                BoneData avatarBoneData = null;
-                float confidence = 0f;
-                MappingMethod method = MappingMethod.NotMapped;
-                bool isManuallyMapped = false;
+                string path = GetTransformPath(transform, obj.transform);
+                boneDict[path] = transform;
 
-                bool hasMapping = mappingData.GetAvatarBoneForCostumeBone(
-                    costumeBoneData.id, out avatarBoneData, out confidence, out method, out isManuallyMapped);
-
-                if (hasMapping && avatarBoneData != null && avatarBoneData.transform != null)
+                // 正規化されたボーン名も追加（大文字小文字を区別せず、アンダースコアなどを除去）
+                string normalizedName = NormalizeBoneName(transform.name);
+                if (!string.IsNullOrEmpty(normalizedName) && !boneDict.ContainsKey(normalizedName))
                 {
-                    return avatarBoneData.transform;
+                    boneDict[normalizedName] = transform;
                 }
             }
 
-            // 代替マッピング探索方法
-            // 1. 名前による直接検索
-            string boneName = costumeBone.name;
-            Transform directMatch = FindBoneByName(avatarObject, boneName);
-            if (directMatch != null)
-                return directMatch;
-
-            // 2. 体のパーツ位置による検索
-            Transform positionMatch = FindBoneByPosition(costumeBone, avatarObject, avatarBones, costumeBones);
-            if (positionMatch != null)
-                return positionMatch;
-
-            // 3. 最後の手段としてヒップボーンまたはルートを返す
-            var hipBone = avatarBones.FirstOrDefault(b => b.bodyPart == BodyPart.Hips);
-            if (hipBone != null && hipBone.transform != null)
-                return hipBone.transform;
-
-            // それでも見つからない場合はアバターのルートを返す
-            return avatarObject.transform;
+            return boneDict;
         }
-        
+
         /// <summary>
-        /// 名前でボーンを検索する
+        /// マッピングデータからIDをキーとするマッピング辞書を作成
         /// </summary>
-        private static Transform FindBoneByName(GameObject root, string boneName)
+        private static Dictionary<string, string> CreateBoneIdMappingDictionary(MappingData mappingData)
+        {
+            Dictionary<string, string> idMapping = new Dictionary<string, string>();
+            
+            if (mappingData == null || mappingData.BoneMappings == null)
+                return idMapping;
+
+            foreach (var mapping in mappingData.BoneMappings)
+            {
+                // 衣装ボーンID -> アバターボーンID のマッピング
+                idMapping[mapping.CostumeBoneId] = mapping.AvatarBoneId;
+            }
+
+            return idMapping;
+        }
+
+        /// <summary>
+        /// ボーン名を正規化する（大文字小文字を区別せず、アンダースコアなどを除去）
+        /// </summary>
+        private static string NormalizeBoneName(string boneName)
         {
             if (string.IsNullOrEmpty(boneName))
-                return null;
+                return "";
 
-            // 完全一致検索
-            Transform[] allTransforms = root.GetComponentsInChildren<Transform>();
-            foreach (var transform in allTransforms)
-            {
-                if (transform.name == boneName)
-                    return transform;
-            }
-
-            // 部分一致検索（LeftArm → left_arm, leftarm, LEFT_ARM などのバリエーションに対応）
-            string normalizedName = boneName.ToLowerInvariant().Replace("_", "").Replace(" ", "");
-            foreach (var transform in allTransforms)
-            {
-                string normalizedTransformName = transform.name.ToLowerInvariant().Replace("_", "").Replace(" ", "");
-                if (normalizedTransformName.Contains(normalizedName) || normalizedName.Contains(normalizedTransformName))
-                    return transform;
-            }
-
-            return null;
+            return boneName.ToLowerInvariant()
+                .Replace("_", "")
+                .Replace(" ", "")
+                .Replace("-", "");
         }
 
         /// <summary>
-        /// 位置に基づいてボーンを検索する
+        /// トランスフォームのパスを取得
         /// </summary>
-        private static Transform FindBoneByPosition(
-            Transform costumeBone,
-            GameObject avatarObject,
-            List<BoneData> avatarBones,
-            List<BoneData> costumeBones)
+        private static string GetTransformPath(Transform transform, Transform root)
         {
-            // 衣装ボーンの位置情報からボディパーツを推測
-            Vector3 costumePos = costumeBone.position;
-            Vector3 costumeLocalPos = costumeBone.localPosition;
+            if (transform == root)
+                return "";
 
-            // コスチュームのボーンからボディパーツを推測する
-            BoneData costumeBoneData = costumeBones.FirstOrDefault(b => b.transform == costumeBone);
-            BodyPart suggestedBodyPart = costumeBoneData != null ? costumeBoneData.bodyPart : BodyPart.Unknown;
+            if (transform.parent == root)
+                return transform.name;
 
-            // 推測したボディパーツに基づいてアバターの対応するボーンを検索
-            if (suggestedBodyPart != BodyPart.Unknown)
-            {
-                var matchingAvatarBones = avatarBones.Where(b => b.bodyPart == suggestedBodyPart).ToList();
-                if (matchingAvatarBones.Count > 0)
-                {
-                    // 単純に最初のマッチを返す（将来的にはより精密な選択ロジックを実装予定）
-                    return matchingAvatarBones[0].transform;
-                }
-            }
-
-            // ボディパーツが不明または一致するボーンが見つからない場合は、位置による最近接ボーンを検索
-            float closestDistance = float.MaxValue;
-            Transform closestBone = null;
-
-            foreach (var avatarBone in avatarBones)
-            {
-                if (avatarBone.transform != null)
-                {
-                    float distance = Vector3.Distance(costumePos, avatarBone.transform.position);
-                    if (distance < closestDistance)
-                    {
-                        closestDistance = distance;
-                        closestBone = avatarBone.transform;
-                    }
-                }
-            }
-
-            return closestBone;
+            return GetTransformPath(transform.parent, root) + "/" + transform.name;
         }
-
-        /// <summary>
-        /// 2つのボーンの階層構造が異なるかどうかをチェック
-        /// </summary>
-        private static bool IsStructurallyDifferent(Transform originalBone, Transform newBone)
-        {
-            if (originalBone == null || newBone == null)
-                return false;
-
-            // 親の数が異なる場合は構造が異なる
-            int originalDepth = 0;
-            int newDepth = 0;
-            
-            Transform originalParent = originalBone.parent;
-            while (originalParent != null)
-            {
-                originalDepth++;
-                originalParent = originalParent.parent;
-            }
-            
-            Transform newParent = newBone.parent;
-            while (newParent != null)
-            {
-                newDepth++;
-                newParent = newParent.parent;
-            }
-            
-            // 階層の深さが異なる場合は構造が異なると判断
-            if (Mathf.Abs(originalDepth - newDepth) > 1)
-                return true;
-                
-            return false;
-        }
-
-        /// <summary>
-        /// バインドポーズを再計算
-        /// </summary>
-        private static void RecalculateBindPoses(
-            ref Matrix4x4[] newBindPoses,
-            Dictionary<int, BoneTransformInfo> boneTransformMap,
-            SkinnedMeshRenderer renderer)
-        {
-            // 新しいボーン構造に基づいてバインドポーズを再計算
-            foreach (var kvp in boneTransformMap)
-            {
-                int index = kvp.Key;
-                BoneTransformInfo info = kvp.Value;
-
-                if (info.NewBone != null)
-                {
-                    // ボーンのワールド空間からメッシュのローカル空間への変換を計算
-                    Matrix4x4 bindPose = Matrix4x4.identity;
-                    
-                    // レンダラーのトランスフォームが存在する場合は考慮
-                    if (renderer.transform != null)
-                    {
-                        bindPose = renderer.transform.worldToLocalMatrix * info.NewBone.localToWorldMatrix;
-                    }
-                    else
-                    {
-                        bindPose = info.NewBone.worldToLocalMatrix;
-                    }
-                    
-                    bindPose = bindPose.inverse;
-                    newBindPoses[index] = bindPose;
-                }
-                else
-                {
-                    // 対応するボーンがない場合は元のバインドポーズを使用
-                    newBindPoses[index] = info.OriginalBindPose;
-                }
-            }
-        }
-
-        /// <summary>
-        /// スキンメッシュのウェイトを再分配
-        /// </summary>
-        private static void RedistributeSkinnedMeshWeights(Mesh mesh, Transform[] originalBones, Transform[] newBones)
-        {
-            if (mesh == null || !mesh.isReadable)
-            {
-                Debug.LogWarning("メッシュが読み取り可能ではないため、スキンウェイトの再分配ができません。");
-                return;
-            }
-
-            // ボーンのインデックスマッピングを作成
-            Dictionary<int, int> boneIndexMap = new Dictionary<int, int>();
-            for (int i = 0; i < originalBones.Length; i++)
-            {
-                if (originalBones[i] != null && newBones[i] != null)
-                {
-                    boneIndexMap[i] = i; // 同じインデックスを使用
-                }
-            }
-
-            // ウェイトデータが少ない場合の対処
-            if (mesh.boneWeights.Length == 0)
-                return;
-
-            // ウェイトデータの複製
-            BoneWeight[] oldWeights = mesh.boneWeights;
-            BoneWeight[] newWeights = new BoneWeight[oldWeights.Length];
-
-            // 各頂点のウェイトを再分配
-            for (int i = 0; i < oldWeights.Length; i++)
-            {
-                BoneWeight oldWeight = oldWeights[i];
-                BoneWeight newWeight = new BoneWeight();
-
-                // 重みの合計
-                float totalWeight = 0;
-                
-                // 各ボーンインデックスの処理
-                // インデックス0の処理
-                if (boneIndexMap.ContainsKey(oldWeight.boneIndex0) && oldWeight.weight0 > 0)
-                {
-                    newWeight.boneIndex0 = boneIndexMap[oldWeight.boneIndex0];
-                    newWeight.weight0 = oldWeight.weight0;
-                    totalWeight += oldWeight.weight0;
-                }
-                else
-                {
-                    newWeight.boneIndex0 = 0;
-                    newWeight.weight0 = 0;
-                }
-
-                // インデックス1の処理
-                if (boneIndexMap.ContainsKey(oldWeight.boneIndex1) && oldWeight.weight1 > 0)
-                {
-                    newWeight.boneIndex1 = boneIndexMap[oldWeight.boneIndex1];
-                    newWeight.weight1 = oldWeight.weight1;
-                    totalWeight += oldWeight.weight1;
-                }
-                else
-                {
-                    newWeight.boneIndex1 = 0;
-                    newWeight.weight1 = 0;
-                }
-
-                // インデックス2の処理
-                if (boneIndexMap.ContainsKey(oldWeight.boneIndex2) && oldWeight.weight2 > 0)
-                {
-                    newWeight.boneIndex2 = boneIndexMap[oldWeight.boneIndex2];
-                    newWeight.weight2 = oldWeight.weight2;
-                    totalWeight += oldWeight.weight2;
-                }
-                else
-                {
-                    newWeight.boneIndex2 = 0;
-                    newWeight.weight2 = 0;
-                }
-
-                // インデックス3の処理
-                if (boneIndexMap.ContainsKey(oldWeight.boneIndex3) && oldWeight.weight3 > 0)
-                {
-                    newWeight.boneIndex3 = boneIndexMap[oldWeight.boneIndex3];
-                    newWeight.weight3 = oldWeight.weight3;
-                    totalWeight += oldWeight.weight3;
-                }
-                else
-                {
-                    newWeight.boneIndex3 = 0;
-                    newWeight.weight3 = 0;
-                }
-
-                // ウェイトの正規化（合計が0でない場合）
-                if (totalWeight > 0)
-                {
-                    newWeight.weight0 /= totalWeight;
-                    newWeight.weight1 /= totalWeight;
-                    newWeight.weight2 /= totalWeight;
-                    newWeight.weight3 /= totalWeight;
-                }
-                else
-                {
-                    // ウェイトの合計が0の場合、最初のボーンに全てのウェイトを割り当て
-                    newWeight.boneIndex0 = 0;
-                    newWeight.weight0 = 1;
-                    newWeight.boneIndex1 = 0;
-                    newWeight.weight1 = 0;
-                    newWeight.boneIndex2 = 0;
-                    newWeight.weight2 = 0;
-                    newWeight.boneIndex3 = 0;
-                    newWeight.weight3 = 0;
-                }
-
-                newWeights[i] = newWeight;
-            }
-
-            // 新しいウェイトをメッシュに設定
-            mesh.boneWeights = newWeights;
-        }
-
-        /// <summary>
-        /// ボーン変換情報を保持する構造体
-        /// </summary>
-        private struct BoneTransformInfo
-        {
-            public Transform OriginalBone;
-            public Transform NewBone;
-            public Matrix4x4 OriginalBindPose;
-        }
-    }
-}
