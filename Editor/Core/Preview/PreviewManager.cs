@@ -96,6 +96,20 @@ namespace AvatarCostumeAdjustTool
             set { _showWireframe = value; }
         }
 
+        private float _previewOpacity = 0.5f;
+        public float PreviewOpacity
+        {
+            get { return _previewOpacity; }
+            set { _previewOpacity = value; }
+        }
+
+        private bool _previewEnabled = true;
+        public bool PreviewEnabled
+        {
+            get { return _previewEnabled; }
+            set { _previewEnabled = value; }
+        }
+
         private Color _wireframeColor = new Color(0f, 0.7f, 1f, 0.5f);
         public Color WireframeColor
         {
@@ -118,6 +132,30 @@ namespace AvatarCostumeAdjustTool
         {
             // コールバックの初期化
             _sceneViewUpdateCallback = OnSceneViewUpdate;
+        }
+
+        /// <summary>
+        /// プレビューの表示/非表示を設定（静的メソッド）
+        /// </summary>
+        public static void SetPreviewEnabled(bool enabled)
+        {
+            Instance.PreviewEnabled = enabled;
+        }
+
+        /// <summary>
+        /// プレビューの透明度を設定（静的メソッド）
+        /// </summary>
+        public static void SetPreviewOpacity(float opacity)
+        {
+            Instance.PreviewOpacity = opacity;
+        }
+
+        /// <summary>
+        /// ワイヤーフレームモードを設定（静的メソッド）
+        /// </summary>
+        public static void SetWireframeMode(bool enabled)
+        {
+            Instance.ShowWireframe = enabled;
         }
 
         /// <summary>
@@ -283,7 +321,7 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         private void OnSceneViewUpdate(SceneView sceneView)
         {
-            if (_previewAvatar == null)
+            if (_previewAvatar == null || !_previewEnabled)
                 return;
 
             // 背景色の設定
@@ -317,10 +355,14 @@ namespace AvatarCostumeAdjustTool
             // ワイヤーフレームの描画
             if (_showWireframe)
             {
-                DrawWireframe(_previewAvatar, _wireframeColor);
+                // 透明度を適用した色を使用
+                Color wireColor = new Color(_wireframeColor.r, _wireframeColor.g, _wireframeColor.b, _previewOpacity);
+                
+                DrawWireframe(_previewAvatar, wireColor);
                 if (_appliedCostumeInstance != null)
                 {
-                    DrawWireframe(_appliedCostumeInstance, new Color(_wireframeColor.r, _wireframeColor.g, _wireframeColor.b, 0.3f));
+                    Color costumeWireColor = new Color(wireColor.r, wireColor.g, wireColor.b, wireColor.a * 0.6f);
+                    DrawWireframe(_appliedCostumeInstance, costumeWireColor);
                 }
             }
 
