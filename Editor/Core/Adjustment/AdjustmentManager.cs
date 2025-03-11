@@ -63,8 +63,8 @@ namespace AvatarCostumeAdjustTool
             try
             {
                 // アバターと衣装のボーン情報を収集
-                List<BoneData> avatarBones = BoneIdentifier.CollectBones(avatarObject);
-                List<BoneData> costumeBones = BoneIdentifier.CollectBones(costumeObject);
+                List<BoneData> avatarBones = BoneIdentifier.AnalyzeAvatarBones(avatarObject);
+                List<BoneData> costumeBones = BoneIdentifier.AnalyzeCostumeBones(costumeObject);
                 
                 // ボーン構造の自動適応処理を実行（設定が有効な場合）
                 if (settings.detectStructuralDifferences)
