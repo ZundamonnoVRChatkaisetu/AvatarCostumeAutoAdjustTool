@@ -30,6 +30,11 @@ namespace AvatarCostumeAdjustTool
         public bool isEnabled = true;
         public bool useCustomSettings = false;
         
+        // スケール・位置・回転の個別調整有効フラグ
+        public bool adjustScale = true;
+        public bool adjustPosition = true;
+        public bool adjustRotation = true;
+        
         /// <summary>
         /// デフォルトコンストラクタ
         /// </summary>
@@ -52,6 +57,9 @@ namespace AvatarCostumeAdjustTool
             this.rotation = other.rotation;
             this.isEnabled = other.isEnabled;
             this.useCustomSettings = other.useCustomSettings;
+            this.adjustScale = other.adjustScale;
+            this.adjustPosition = other.adjustPosition;
+            this.adjustRotation = other.adjustRotation;
         }
         
         /// <summary>
@@ -68,6 +76,9 @@ namespace AvatarCostumeAdjustTool
             rotation = Vector3.zero;
             isEnabled = true;
             useCustomSettings = false;
+            adjustScale = true;
+            adjustPosition = true;
+            adjustRotation = true;
         }
         
         /// <summary>
@@ -85,6 +96,15 @@ namespace AvatarCostumeAdjustTool
         {
             return new Vector3(offsetX, offsetY, offsetZ);
         }
+        
+        // バインドポーズやスケールを調整するときに使用する最終スケール値
+        public Vector3 scaleMultiplier { get { return GetScaleVector(); } }
+        
+        // 位置調整に使用する最終オフセット値
+        public Vector3 positionOffset { get { return GetOffsetVector(); } }
+        
+        // 回転調整に使用する最終回転値
+        public Vector3 rotationOffset { get { return rotation; } }
         
         // PreviewManager用のプロパティ
         public Vector3 Scale { get { return GetScaleVector(); } }
@@ -127,7 +147,7 @@ namespace AvatarCostumeAdjustTool
         public Vector3 PositionOffset = Vector3.zero;
         public Vector3 RotationOffset = Vector3.zero;
         
-        // 部位別詳細設定 - privateからpublicに変更
+        // 部位別詳細設定
         public Dictionary<BodyPart, BodyPartAdjustment> bodyPartAdjustments = new Dictionary<BodyPart, BodyPartAdjustment>();
         
         // リスト形式の部位別調整（シリアル化とPreviewManager用）
@@ -139,6 +159,22 @@ namespace AvatarCostumeAdjustTool
         // プリセット情報
         public string presetName = "";
         public string presetDescription = "";
+        
+        // 高度な調整オプション
+        public bool adjustScale = true;     // スケールの調整を行うかどうか
+        public bool adjustRotation = true;  // 回転の調整を行うかどうか
+        public bool adjustBindPoses = true; // バインドポーズの調整を行うかどうか
+        
+        // ボーン構造差異対応設定
+        public bool detectStructuralDifferences = true;  // 構造の違いを自動検出
+        public bool redistributeWeights = true;          // ウェイトの再分配を行う
+        public float confidenceThreshold = 0.3f;         // マッピング信頼度のしきい値
+        
+        // アドバンスドオプション
+        public bool useAdvancedOptions = false;          // 高度なオプションを使用するかどうか
+        public bool forceUpdateBindPoses = false;        // 強制的にバインドポーズを更新
+        public bool maintainBoneHierarchy = true;        // ボーン階層構造を維持
+        public float positionTolerance = 0.01f;          // 位置の許容誤差
         
         /// <summary>
         /// デフォルトコンストラクタ
@@ -177,6 +213,18 @@ namespace AvatarCostumeAdjustTool
             
             this.presetName = other.presetName;
             this.presetDescription = other.presetDescription;
+            
+            // 高度なオプションのコピー
+            this.adjustScale = other.adjustScale;
+            this.adjustRotation = other.adjustRotation;
+            this.adjustBindPoses = other.adjustBindPoses;
+            this.detectStructuralDifferences = other.detectStructuralDifferences;
+            this.redistributeWeights = other.redistributeWeights;
+            this.confidenceThreshold = other.confidenceThreshold;
+            this.useAdvancedOptions = other.useAdvancedOptions;
+            this.forceUpdateBindPoses = other.forceUpdateBindPoses;
+            this.maintainBoneHierarchy = other.maintainBoneHierarchy;
+            this.positionTolerance = other.positionTolerance;
             
             // 部位別調整のディープコピー
             this.bodyPartAdjustments = new Dictionary<BodyPart, BodyPartAdjustment>();
@@ -264,6 +312,18 @@ namespace AvatarCostumeAdjustTool
             
             PositionOffset = Vector3.zero;
             RotationOffset = Vector3.zero;
+            
+            // 高度なオプションをリセット
+            adjustScale = true;
+            adjustRotation = true;
+            adjustBindPoses = true;
+            detectStructuralDifferences = true;
+            redistributeWeights = true;
+            confidenceThreshold = 0.3f;
+            useAdvancedOptions = false;
+            forceUpdateBindPoses = false;
+            maintainBoneHierarchy = true;
+            positionTolerance = 0.01f;
             
             // 部位別調整をリセット
             foreach (var part in bodyPartAdjustments.Keys)
