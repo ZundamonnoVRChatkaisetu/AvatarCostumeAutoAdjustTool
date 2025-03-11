@@ -76,13 +76,29 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         private static bool IsAvatarCacheValid(GameObject avatarObject, List<BoneData> cachedBones)
         {
-            // 簡易チェック: Transform数が同じかどうか
-            int transformCount = CountTransforms(avatarObject.transform);
-            int cachedBoneCount = cachedBones.Count;
-            
-            if (transformCount != cachedBoneCount)
+            // Armatureを検索
+            Transform armatureTransform = FindArmature(avatarObject.transform);
+            if (armatureTransform == null)
             {
-                return false;
+                // Armatureが見つからない場合は従来の方法でチェック
+                int transformCount = CountTransforms(avatarObject.transform);
+                int cachedBoneCount = cachedBones.Count;
+                
+                if (transformCount != cachedBoneCount)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                // Armature内のTransform数をチェック
+                int armatureTransformCount = CountTransforms(armatureTransform);
+                int cachedBoneCount = cachedBones.Count;
+                
+                if (armatureTransformCount != cachedBoneCount)
+                {
+                    return false;
+                }
             }
             
             // ルートボーンのチェック
@@ -108,13 +124,29 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         private static bool IsCostumeCacheValid(GameObject costumeObject, List<BoneData> cachedBones)
         {
-            // 簡易チェック: Transform数が同じかどうか
-            int transformCount = CountTransforms(costumeObject.transform);
-            int cachedBoneCount = cachedBones.Count;
-            
-            if (transformCount != cachedBoneCount)
+            // Armatureを検索
+            Transform armatureTransform = FindArmature(costumeObject.transform);
+            if (armatureTransform == null)
             {
-                return false;
+                // Armatureが見つからない場合は従来の方法でチェック
+                int transformCount = CountTransforms(costumeObject.transform);
+                int cachedBoneCount = cachedBones.Count;
+                
+                if (transformCount != cachedBoneCount)
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                // Armature内のTransform数をチェック
+                int armatureTransformCount = CountTransforms(armatureTransform);
+                int cachedBoneCount = cachedBones.Count;
+                
+                if (armatureTransformCount != cachedBoneCount)
+                {
+                    return false;
+                }
             }
             
             // メッシュ構造のチェック
@@ -155,6 +187,31 @@ namespace AvatarCostumeAdjustTool
         }
         
         /// <summary>
+        /// Armatureトランスフォームを検索
+        /// </summary>
+        private static Transform FindArmature(Transform root)
+        {
+            // まず自分自身をチェック
+            if (root.name.ToLower().Contains("armature"))
+            {
+                return root;
+            }
+            
+            // 子を再帰的にチェック
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform child = root.GetChild(i);
+                Transform result = FindArmature(child);
+                if (result != null)
+                {
+                    return result;
+                }
+            }
+            
+            return null;
+        }
+        
+        /// <summary>
         /// ボーン構造を解析して情報リストを作成
         /// </summary>
         private static List<BoneData> AnalyzeBones(GameObject targetObject, bool isAvatar)
@@ -174,11 +231,24 @@ namespace AvatarCostumeAdjustTool
                 }
             }
             
+            // Armatureを検索
+            Transform armatureTransform = FindArmature(targetObject.transform);
+            
             // スキンメッシュ関連のボーン収集
             CollectSkinnedMeshBones(targetObject, result, transformToBone);
             
-            // 残りのTransformを収集
-            CollectRemainingTransforms(targetObject.transform, null, result, transformToBone, isAvatar);
+            // Armatureが見つかった場合はArmature配下のみ処理
+            if (armatureTransform != null)
+            {
+                Debug.Log($"Armature '{armatureTransform.name}' を見つけました。Armature配下のボーンのみを収集します。");
+                CollectArmatureBones(armatureTransform, null, result, transformToBone, isAvatar);
+            }
+            else
+            {
+                // Armatureが見つからない場合は従来の方法で収集
+                Debug.Log("Armatureが見つかりませんでした。全てのTransformからボーンを収集します。");
+                CollectRemainingTransforms(targetObject.transform, null, result, transformToBone, isAvatar);
+            }
             
             // 親子関係の設定
             SetupParentChildRelationships(result, transformToBone);
@@ -229,6 +299,42 @@ namespace AvatarCostumeAdjustTool
                         }
                     }
                 }
+            }
+        }
+        
+        /// <summary>
+        /// Armatureからボーン情報を収集
+        /// </summary>
+        private static void CollectArmatureBones(Transform current, string parentId, List<BoneData> boneList, Dictionary<Transform, BoneData> transformToBone, bool isAvatar)
+        {
+            // すでに処理済みならスキップ
+            if (transformToBone.ContainsKey(current))
+            {
+                // 親IDの設定だけ行う
+                if (parentId != null)
+                {
+                    transformToBone[current].parentId = parentId;
+                }
+                
+                // 子の処理
+                string currentId = transformToBone[current].id;
+                for (int i = 0; i < current.childCount; i++)
+                {
+                    CollectArmatureBones(current.GetChild(i), currentId, boneList, transformToBone, isAvatar);
+                }
+                
+                return;
+            }
+            
+            // 新しいボーンデータを作成
+            BoneData boneData = new BoneData(current, parentId);
+            boneList.Add(boneData);
+            transformToBone[current] = boneData;
+            
+            // 子の処理
+            for (int i = 0; i < current.childCount; i++)
+            {
+                CollectArmatureBones(current.GetChild(i), boneData.id, boneList, transformToBone, isAvatar);
             }
         }
         
