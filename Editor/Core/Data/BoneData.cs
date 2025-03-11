@@ -9,6 +9,7 @@ namespace AvatarCostumeAdjustTool
     /// </summary>
     public enum BodyPart
     {
+        Unknown = -1,    // 不明 (追加)
         Head,           // 頭部
         Neck,           // 首
         Chest,          // 胸部
