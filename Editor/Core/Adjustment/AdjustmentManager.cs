@@ -28,6 +28,9 @@ namespace AvatarCostumeAdjustTool
         
         // 最後に適用した調整設定を保存
         private static AdjustmentSettings lastAdjustmentSettings;
+        
+        // BlenderBridge使用設定
+        private static bool useBlenderBridge = true;
 
         /// <summary>
         /// 衣装を適用する
@@ -46,6 +49,16 @@ namespace AvatarCostumeAdjustTool
             
             // 既存の衣装インスタンスがあれば削除
             CleanupExistingCostumeInstance(avatarObject);
+            
+            // Blenderブリッジを使った処理を試みる
+            if (useBlenderBridge && TryApplyCostumeWithBlender(avatarObject, costumeObject, mappingData, settings))
+            {
+                // Blenderでの処理が成功した場合はここで終了
+                Debug.Log("Blenderを使用して衣装を適用しました。");
+                return;
+            }
+            
+            // Blenderでの処理が失敗した場合や無効な場合は従来の処理を実行
             
             // 新しい衣装インスタンスを作成
             costumeInstance = GameObject.Instantiate(costumeObject);
@@ -112,6 +125,80 @@ namespace AvatarCostumeAdjustTool
             // エディタの更新を要求
             EditorUtility.SetDirty(avatarObject);
             SceneView.RepaintAll();
+        }
+        
+        /// <summary>
+        /// Blenderを使って衣装適用を試みる
+        /// </summary>
+        private static bool TryApplyCostumeWithBlender(
+            GameObject avatarObject, 
+            GameObject costumeObject, 
+            MappingData mappingData, 
+            AdjustmentSettings settings)
+        {
+            try
+            {
+                // プログレスバーを表示
+                EditorUtility.DisplayProgressBar("Blender連携", "Blenderを使った衣装適用処理を準備中...", 0.1f);
+                
+                // BlenderBridgeの初期化
+                if (!BlenderBridge.Initialize())
+                {
+                    EditorUtility.ClearProgressBar();
+                    Debug.LogWarning("Blender連携機能の初期化に失敗しました。Unity内での処理を行います。");
+                    return false;
+                }
+                
+                // Blenderが見つからない場合
+                if (string.IsNullOrEmpty(BlenderBridge.GetBlenderPath()))
+                {
+                    EditorUtility.ClearProgressBar();
+                    Debug.LogWarning("Blenderが見つかりません。Unity内での処理を行います。");
+                    return false;
+                }
+                
+                // Blenderを使った衣装適用を実行
+                bool success = BlenderBridge.ApplyCostumeWithBlender(
+                    avatarObject, 
+                    costumeObject, 
+                    mappingData, 
+                    settings,
+                    (progress) => {
+                        EditorUtility.DisplayProgressBar("Blender連携", "Blenderを使って衣装適用処理を実行中...", progress);
+                    }
+                );
+                
+                EditorUtility.ClearProgressBar();
+                
+                if (success)
+                {
+                    // 成功した場合、Blenderによって生成された衣装インスタンスを参照
+                    costumeInstance = FindCostumeInstance(avatarObject);
+                    if (costumeInstance != null)
+                    {
+                        // 最後に適用したアバターと設定を保存
+                        lastAvatarObject = avatarObject;
+                        lastAdjustmentSettings = settings.Clone();
+                        
+                        // エディタの更新を要求
+                        EditorUtility.SetDirty(avatarObject);
+                        SceneView.RepaintAll();
+                    }
+                    else
+                    {
+                        Debug.LogError("Blenderでの処理は成功しましたが、衣装インスタンスが見つかりません。");
+                        return false;
+                    }
+                }
+                
+                return success;
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.ClearProgressBar();
+                Debug.LogError($"Blenderを使った衣装適用でエラーが発生しました: {ex.Message}\n{ex.StackTrace}");
+                return false;
+            }
         }
         
         /// <summary>
@@ -454,6 +541,23 @@ namespace AvatarCostumeAdjustTool
         public static AdjustmentSettings GetLastAdjustmentSettings()
         {
             return lastAdjustmentSettings;
+        }
+        
+        /// <summary>
+        /// Blender連携機能の使用設定を取得
+        /// </summary>
+        public static bool GetUseBlenderBridge()
+        {
+            return useBlenderBridge;
+        }
+        
+        /// <summary>
+        /// Blender連携機能の使用設定を変更
+        /// </summary>
+        public static void SetUseBlenderBridge(bool use)
+        {
+            useBlenderBridge = use;
+            EditorPrefs.SetBool("AvatarCostumeAdjustTool_UseBlenderBridge", useBlenderBridge);
         }
     }
 }
