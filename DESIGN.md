@@ -1,758 +1,408 @@
-using UnityEngine;
-using UnityEditor;
-using System;
-using System.Collections.Generic;
+# 全アバター衣装自動調整ツール - 設計ドキュメント
 
-namespace AvatarCostumeAdjustTool
-{
-    /// <summary>
-    /// 衣装の微調整を行うクラス
-    /// </summary>
-    public static class FineAdjuster
-    {
-        // 調整の適用履歴を保持
-        private static Stack<AdjustmentSettings> adjustmentHistory = new Stack<AdjustmentSettings>();
-        
-        /// <summary>
-        /// 微調整を適用する
-        /// </summary>
-        public static void ApplyAdjustment(
-            GameObject avatarObject,
-            GameObject costumeObject,
-            AdjustmentSettings settings)
-        {
-            if (avatarObject == null || settings == null)
-            {
-                Debug.LogError("微調整に必要なオブジェクトが不足しています。");
-                return;
-            }
-            
-            // 衣装オブジェクトが実際に存在するか確認
-            if (costumeObject == null || !costumeObject.activeInHierarchy)
-            {
-                // AdjustmentManagerから最新の衣装インスタンスを取得
-                costumeObject = AdjustmentManager.GetCostumeInstance();
-                
-                if (costumeObject == null)
-                {
-                    // アバターの子から衣装インスタンスを探す
-                    for (int i = 0; i < avatarObject.transform.childCount; i++)
-                    {
-                        Transform child = avatarObject.transform.GetChild(i);
-                        if (child.name.EndsWith("_Instance"))
-                        {
-                            costumeObject = child.gameObject;
-                            break;
-                        }
-                    }
-                    
-                    if (costumeObject == null)
-                    {
-                        Debug.LogError("衣装オブジェクトが見つかりません。先に「衣装を着せる」を実行してください。");
-                        return;
-                    }
-                }
-            }
+## 1. プロジェクト構造
 
-            // 調整履歴に現在の設定を保存
-            adjustmentHistory.Push(settings.Clone());
+```
+AvatarCostumeAutoAdjustTool/
+├── Editor/
+│   ├── AvatarCostumeAdjustTool.cs           # メインのエディタウィンドウ
+│   ├── AvatarCostumeAdjustTool.asmdef       # アセンブリ定義
+│   ├── UI/
+│   │   ├── BoneMappingTab.cs                # ボーンマッピングタブのUI
+│   │   ├── AdjustmentTab.cs                 # 調整タブのUI
+│   │   └── SettingsTab.cs                   # 設定タブのUI
+│   ├── Core/
+│   │   ├── BoneMapping/
+│   │   │   ├── BoneIdentifier.cs            # ボーン識別アルゴリズム
+│   │   │   ├── NameBasedMapper.cs           # 名前ベースのボーンマッピング
+│   │   │   ├── HierarchyBasedMapper.cs      # 階層ベースのボーンマッピング
+│   │   │   ├── PositionBasedMapper.cs       # 位置ベースのボーンマッピング
+│   │   │   ├── MappingManager.cs            # マッピング管理
+│   │   │   └── HumanoidRigRetriever.cs      # ヒューマノイドリグ取得
+│   │   ├── Adjustment/
+│   │   │   ├── BoneBasedAdjuster.cs         # ボーンベースの調整アルゴリズム
+│   │   │   ├── MeshBasedAdjuster.cs         # メッシュベースの調整アルゴリズム
+│   │   │   ├── BoneStructureAdapter.cs      # ボーン構造差異対応アダプター
+│   │   │   ├── FineAdjuster.cs              # 微調整機能
+│   │   │   ├── BodyPartAdjuster.cs          # 体の部位別調整機能
+│   │   │   └── AdjustmentManager.cs         # 調整管理
+│   │   ├── Preview/
+│   │   │   └── PreviewManager.cs            # プレビュー管理
+│   │   └── Data/
+│   │       ├── BoneData.cs                  # ボーン情報モデル
+│   │       ├── MappingData.cs               # マッピング情報モデル
+│   │       ├── AdjustmentSettings.cs        # 調整設定モデル
+│   │       └── DataManager.cs               # データ管理
+│   ├── Utils/
+│   │   ├── JsonUtils.cs                     # JSON操作ユーティリティ
+│   │   ├── EditorUtils.cs                   # エディタ関連ユーティリティ
+│   │   ├── MeshUtils.cs                     # メッシュ操作ユーティリティ
+│   │   └── BlenderBridge.cs                 # Blender連携ユーティリティ
+│   ├── Resources/
+│   │   ├── Icons/                           # アイコンリソース
+│   │   │   ├── icon_avatar.png              # アバターアイコン
+│   │   │   ├── icon_costume.png             # 衣装アイコン
+│   │   │   └── icon_tool.png                # ツールアイコン
+│   │   ├── BoneNamingPatterns.json          # ボーン命名パターンデータ
+│   │   └── BodyPartReferences.json          # 身体部位参照データ
+│   └── BlenderScripts/                      # Blender用Pythonスクリプト
+│       └── apply_costume.py                 # 衣装適用スクリプト
+└── Tests/
+    └── ...                                  # テスト関連 (未実装)
+```
 
-            // 1. グローバルスケールの適用
-            costumeObject.transform.localScale = Vector3.one * settings.globalScale;
-            
-            // 2. 上半身/下半身の部位ごとの調整
-            ApplyBodyPartAdjustments(costumeObject, settings);
-            
-            // 3. スキニングメッシュを更新して確実に反映させる
-            UpdateSkinnedMeshRenderers(costumeObject);
-            
-            Debug.Log("微調整を適用しました。");
-        }
-        
-        /// <summary>
-        /// スキニングメッシュレンダラーを更新して反映を確実にする
-        /// </summary>
-        private static void UpdateSkinnedMeshRenderers(GameObject costumeObject)
-        {
-            SkinnedMeshRenderer[] renderers = costumeObject.GetComponentsInChildren<SkinnedMeshRenderer>();
-            
-            foreach (var renderer in renderers)
-            {
-                if (renderer != null && renderer.sharedMesh != null)
-                {
-                    // 現在のボーンとルートボーンを保存
-                    Transform[] bones = renderer.bones;
-                    Transform rootBone = renderer.rootBone;
-                    
-                    // 一度リセットして再設定することで強制的に更新
-                    renderer.bones = null;
-                    renderer.rootBone = null;
-                    
-                    renderer.bones = bones;
-                    renderer.rootBone = rootBone;
-                    
-                    // レンダラーを再評価
-                    if (renderer.sharedMesh != null && renderer.sharedMesh.isReadable)
-                    {
-                        renderer.sharedMesh.MarkModified();
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// 体の部位ごとの調整を適用
-        /// </summary>
-        private static void ApplyBodyPartAdjustments(GameObject costumeObject, AdjustmentSettings settings)
-        {
-            // 衣装のレンダラーから体の部位ごとのメッシュを特定
-            Dictionary<BodyPart, List<Renderer>> bodyPartRenderers = IdentifyBodyPartRenderers(costumeObject);
-            
-            // 上半身のオフセット
-            Vector3 upperBodyOffset = settings.GetUpperBodyOffset();
-            if (upperBodyOffset != Vector3.zero)
-            {
-                ApplyUpperBodyOffset(costumeObject, bodyPartRenderers, upperBodyOffset);
-            }
-            
-            // 下半身のオフセット
-            Vector3 lowerBodyOffset = settings.GetLowerBodyOffset();
-            if (lowerBodyOffset != Vector3.zero)
-            {
-                ApplyLowerBodyOffset(costumeObject, bodyPartRenderers, lowerBodyOffset);
-            }
-            
-            // 腕のスケール調整
-            if (settings.leftArmScale != 1.0f)
-            {
-                ApplyArmScale(costumeObject, bodyPartRenderers, true, settings.leftArmScale);
-            }
-            
-            if (settings.rightArmScale != 1.0f)
-            {
-                ApplyArmScale(costumeObject, bodyPartRenderers, false, settings.rightArmScale);
-            }
-            
-            // 脚のスケール調整
-            if (settings.leftLegScale != 1.0f)
-            {
-                ApplyLegScale(costumeObject, bodyPartRenderers, true, settings.leftLegScale);
-            }
-            
-            if (settings.rightLegScale != 1.0f)
-            {
-                ApplyLegScale(costumeObject, bodyPartRenderers, false, settings.rightLegScale);
-            }
-            
-            // 部位別の詳細調整
-            foreach (var part in settings.bodyPartAdjustments.Keys)
-            {
-                var adjustment = settings.bodyPartAdjustments[part];
-                
-                // カスタム設定が有効な場合のみ適用
-                if (adjustment.isEnabled && adjustment.useCustomSettings)
-                {
-                    ApplyCustomBodyPartAdjustment(costumeObject, bodyPartRenderers, part, adjustment);
-                }
-            }
-        }
-        
-        /// <summary>
-        /// レンダラーを体の部位ごとに分類（改良版）
-        /// </summary>
-        private static Dictionary<BodyPart, List<Renderer>> IdentifyBodyPartRenderers(GameObject costumeObject)
-        {
-            Dictionary<BodyPart, List<Renderer>> result = new Dictionary<BodyPart, List<Renderer>>();
-            
-            // 部位ごとのリストを初期化
-            foreach (BodyPart part in Enum.GetValues(typeof(BodyPart)))
-            {
-                result[part] = new List<Renderer>();
-            }
-            
-            // 全レンダラーを収集
-            Renderer[] renderers = costumeObject.GetComponentsInChildren<Renderer>(true);
-            
-            // スキンメッシュレンダラーの場合はボーンから部位を推定
-            foreach (var renderer in renderers)
-            {
-                SkinnedMeshRenderer skinnedRenderer = renderer as SkinnedMeshRenderer;
-                if (skinnedRenderer != null && skinnedRenderer.bones != null && skinnedRenderer.bones.Length > 0)
-                {
-                    // ルートボーンから推定
-                    if (skinnedRenderer.rootBone != null)
-                    {
-                        string rootName = skinnedRenderer.rootBone.name.ToLower();
-                        BodyPart detectedPart = IdentifyBodyPartFromName(rootName);
-                        
-                        if (detectedPart != BodyPart.Unknown)
-                        {
-                            result[detectedPart].Add(renderer);
-                            continue;
-                        }
-                    }
-                    
-                    // 最も影響の大きいボーンから推定
-                    if (skinnedRenderer.sharedMesh != null && skinnedRenderer.sharedMesh.isReadable)
-                    {
-                        BoneWeight[] weights = skinnedRenderer.sharedMesh.boneWeights;
-                        if (weights.Length > 0)
-                        {
-                            // ボーンウェイトの合計を計算
-                            Dictionary<int, float> boneInfluence = new Dictionary<int, float>();
-                            foreach (var weight in weights)
-                            {
-                                AddBoneWeight(boneInfluence, weight.boneIndex0, weight.weight0);
-                                AddBoneWeight(boneInfluence, weight.boneIndex1, weight.weight1);
-                                AddBoneWeight(boneInfluence, weight.boneIndex2, weight.weight2);
-                                AddBoneWeight(boneInfluence, weight.boneIndex3, weight.weight3);
-                            }
-                            
-                            // 最も影響の大きいボーンを特定
-                            int maxInfluenceBoneIndex = -1;
-                            float maxInfluence = 0f;
-                            
-                            foreach (var kvp in boneInfluence)
-                            {
-                                if (kvp.Value > maxInfluence)
-                                {
-                                    maxInfluence = kvp.Value;
-                                    maxInfluenceBoneIndex = kvp.Key;
-                                }
-                            }
-                            
-                            if (maxInfluenceBoneIndex >= 0 && maxInfluenceBoneIndex < skinnedRenderer.bones.Length)
-                            {
-                                Transform bone = skinnedRenderer.bones[maxInfluenceBoneIndex];
-                                if (bone != null)
-                                {
-                                    string boneName = bone.name.ToLower();
-                                    BodyPart detectedPart = IdentifyBodyPartFromName(boneName);
-                                    
-                                    if (detectedPart != BodyPart.Unknown)
-                                    {
-                                        result[detectedPart].Add(renderer);
-                                        continue;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // 名前から部位を推定（レンダラーの名前）
-                string name = renderer.name.ToLower();
-                BodyPart detectedBodyPart = IdentifyBodyPartFromName(name);
-                
-                if (detectedBodyPart != BodyPart.Unknown)
-                {
-                    result[detectedBodyPart].Add(renderer);
-                    continue;
-                }
-                
-                // 親オブジェクトの名前からも推定
-                if (renderer.transform.parent != null)
-                {
-                    string parentName = renderer.transform.parent.name.ToLower();
-                    BodyPart parentBodyPart = IdentifyBodyPartFromName(parentName);
-                    
-                    if (parentBodyPart != BodyPart.Unknown)
-                    {
-                        result[parentBodyPart].Add(renderer);
-                        continue;
-                    }
-                }
-                
-                // 分類できなかった場合はOtherに
-                result[BodyPart.Other].Add(renderer);
-            }
-            
-            return result;
-        }
-        
-        /// <summary>
-        /// ボーンウェイトを追加するヘルパーメソッド
-        /// </summary>
-        private static void AddBoneWeight(Dictionary<int, float> boneInfluence, int boneIndex, float weight)
-        {
-            if (weight <= 0f) return;
-            
-            if (!boneInfluence.ContainsKey(boneIndex))
-            {
-                boneInfluence[boneIndex] = weight;
-            }
-            else
-            {
-                boneInfluence[boneIndex] += weight;
-            }
-        }
-        
-        /// <summary>
-        /// 名前から体の部位を特定
-        /// </summary>
-        private static BodyPart IdentifyBodyPartFromName(string name)
-        {
-            // 頭部
-            if (name.Contains("head") || name.Contains("face") || name.Contains("hair") || 
-                name.Contains("skull") || name.Contains("cranium"))
-            {
-                return BodyPart.Head;
-            }
-            // 首
-            else if (name.Contains("neck"))
-            {
-                return BodyPart.Neck;
-            }
-            // 胸部
-            else if (name.Contains("chest") || name.Contains("breast") || name.Contains("thorax") || 
-                     name.Contains("pectoral") || name.Contains("bust"))
-            {
-                return BodyPart.Chest;
-            }
-            // 上胸部
-            else if (name.Contains("upperchest") || name.Contains("upper_chest"))
-            {
-                return BodyPart.UpperChest;
-            }
-            // 背骨
-            else if (name.Contains("spine") || name.Contains("back") || name.Contains("column"))
-            {
-                return BodyPart.Spine;
-            }
-            // 腰
-            else if (name.Contains("hip") || name.Contains("pelvis") || name.Contains("waist"))
-            {
-                return BodyPart.Hips;
-            }
-            // 左肩
-            else if ((name.Contains("left") || name.Contains("l_") || name.StartsWith("l.") || name.EndsWith(".l") || name.EndsWith("_l")) && 
-                     name.Contains("shoulder"))
-            {
-                return BodyPart.LeftShoulder;
-            }
-            // 右肩
-            else if ((name.Contains("right") || name.Contains("r_") || name.StartsWith("r.") || name.EndsWith(".r") || name.EndsWith("_r")) && 
-                     name.Contains("shoulder"))
-            {
-                return BodyPart.RightShoulder;
-            }
-            // 左上腕
-            else if ((name.Contains("left") || name.Contains("l_") || name.StartsWith("l.") || name.EndsWith(".l") || name.EndsWith("_l")) && 
-                     (name.Contains("arm") || name.Contains("upper") && name.Contains("arm")))
-            {
-                return BodyPart.LeftUpperArm;
-            }
-            // 右上腕
-            else if ((name.Contains("right") || name.Contains("r_") || name.StartsWith("r.") || name.EndsWith(".r") || name.EndsWith("_r")) && 
-                     (name.Contains("arm") || name.Contains("upper") && name.Contains("arm")))
-            {
-                return BodyPart.RightUpperArm;
-            }
-            // 左下腕
-            else if ((name.Contains("left") || name.Contains("l_") || name.StartsWith("l.") || name.EndsWith(".l") || name.EndsWith("_l")) && 
-                     (name.Contains("fore") || name.Contains("lower") && name.Contains("arm")))
-            {
-                return BodyPart.LeftLowerArm;
-            }
-            // 右下腕
-            else if ((name.Contains("right") || name.Contains("r_") || name.StartsWith("r.") || name.EndsWith(".r") || name.EndsWith("_r")) && 
-                     (name.Contains("fore") || name.Contains("lower") && name.Contains("arm")))
-            {
-                return BodyPart.RightLowerArm;
-            }
-            // 左手
-            else if ((name.Contains("left") || name.Contains("l_") || name.StartsWith("l.") || name.EndsWith(".l") || name.EndsWith("_l")) && 
-                     name.Contains("hand"))
-            {
-                return BodyPart.LeftHand;
-            }
-            // 右手
-            else if ((name.Contains("right") || name.Contains("r_") || name.StartsWith("r.") || name.EndsWith(".r") || name.EndsWith("_r")) && 
-                     name.Contains("hand"))
-            {
-                return BodyPart.RightHand;
-            }
-            // 左上脚
-            else if ((name.Contains("left") || name.Contains("l_") || name.StartsWith("l.") || name.EndsWith(".l") || name.EndsWith("_l")) && 
-                     (name.Contains("thigh") || name.Contains("upper") && (name.Contains("leg") || name.Contains("thigh"))))
-            {
-                return BodyPart.LeftUpperLeg;
-            }
-            // 右上脚
-            else if ((name.Contains("right") || name.Contains("r_") || name.StartsWith("r.") || name.EndsWith(".r") || name.EndsWith("_r")) && 
-                     (name.Contains("thigh") || name.Contains("upper") && (name.Contains("leg") || name.Contains("thigh"))))
-            {
-                return BodyPart.RightUpperLeg;
-            }
-            // 左下脚
-            else if ((name.Contains("left") || name.Contains("l_") || name.StartsWith("l.") || name.EndsWith(".l") || name.EndsWith("_l")) && 
-                     (name.Contains("calf") || name.Contains("shin") || name.Contains("lower") && name.Contains("leg")))
-            {
-                return BodyPart.LeftLowerLeg;
-            }
-            // 右下脚
-            else if ((name.Contains("right") || name.Contains("r_") || name.StartsWith("r.") || name.EndsWith(".r") || name.EndsWith("_r")) && 
-                     (name.Contains("calf") || name.Contains("shin") || name.Contains("lower") && name.Contains("leg")))
-            {
-                return BodyPart.RightLowerLeg;
-            }
-            // 左足
-            else if ((name.Contains("left") || name.Contains("l_") || name.StartsWith("l.") || name.EndsWith(".l") || name.EndsWith("_l")) && 
-                     name.Contains("foot"))
-            {
-                return BodyPart.LeftFoot;
-            }
-            // 右足
-            else if ((name.Contains("right") || name.Contains("r_") || name.StartsWith("r.") || name.EndsWith(".r") || name.EndsWith("_r")) && 
-                     name.Contains("foot"))
-            {
-                return BodyPart.RightFoot;
-            }
-            
-            // デフォルト
-            return BodyPart.Unknown;
-        }
-        
-        /// <summary>
-        /// 上半身へのオフセットを適用
-        /// </summary>
-        private static void ApplyUpperBodyOffset(
-            GameObject costumeObject, 
-            Dictionary<BodyPart, List<Renderer>> bodyPartRenderers, 
-            Vector3 offset)
-        {
-            // 上半身に関連する部位のリスト
-            BodyPart[] upperBodyParts = new BodyPart[]
-            {
-                BodyPart.Head,
-                BodyPart.Neck,
-                BodyPart.Chest,
-                BodyPart.UpperChest,
-                BodyPart.Spine,
-                BodyPart.LeftShoulder,
-                BodyPart.LeftUpperArm,
-                BodyPart.LeftLowerArm,
-                BodyPart.LeftHand,
-                BodyPart.RightShoulder,
-                BodyPart.RightUpperArm,
-                BodyPart.RightLowerArm,
-                BodyPart.RightHand,
-                BodyPart.LeftThumb,
-                BodyPart.LeftIndex,
-                BodyPart.LeftMiddle,
-                BodyPart.LeftRing,
-                BodyPart.LeftPinky,
-                BodyPart.RightThumb,
-                BodyPart.RightIndex,
-                BodyPart.RightMiddle,
-                BodyPart.RightRing,
-                BodyPart.RightPinky
-            };
-            
-            // 各部位に対してオフセットを適用
-            foreach (var part in upperBodyParts)
-            {
-                if (bodyPartRenderers.ContainsKey(part))
-                {
-                    foreach (var renderer in bodyPartRenderers[part])
-                    {
-                        if (renderer.transform != null)
-                        {
-                            renderer.transform.position += offset;
-                        }
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// 下半身へのオフセットを適用
-        /// </summary>
-        private static void ApplyLowerBodyOffset(
-            GameObject costumeObject, 
-            Dictionary<BodyPart, List<Renderer>> bodyPartRenderers, 
-            Vector3 offset)
-        {
-            // 下半身に関連する部位のリスト
-            BodyPart[] lowerBodyParts = new BodyPart[]
-            {
-                BodyPart.Hips,
-                BodyPart.LeftUpperLeg,
-                BodyPart.LeftLowerLeg,
-                BodyPart.LeftFoot,
-                BodyPart.LeftToes,
-                BodyPart.RightUpperLeg,
-                BodyPart.RightLowerLeg,
-                BodyPart.RightFoot,
-                BodyPart.RightToes
-            };
-            
-            // 各部位に対してオフセットを適用
-            foreach (var part in lowerBodyParts)
-            {
-                if (bodyPartRenderers.ContainsKey(part))
-                {
-                    foreach (var renderer in bodyPartRenderers[part])
-                    {
-                        if (renderer.transform != null)
-                        {
-                            renderer.transform.position += offset;
-                        }
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// 腕のスケール調整を適用
-        /// </summary>
-        private static void ApplyArmScale(
-            GameObject costumeObject, 
-            Dictionary<BodyPart, List<Renderer>> bodyPartRenderers,
-            bool isLeft,
-            float scale)
-        {
-            // 腕に関連する部位のリスト
-            BodyPart[] armParts;
-            
-            if (isLeft)
-            {
-                armParts = new BodyPart[]
-                {
-                    BodyPart.LeftShoulder,
-                    BodyPart.LeftUpperArm,
-                    BodyPart.LeftLowerArm,
-                    BodyPart.LeftHand,
-                    BodyPart.LeftThumb,
-                    BodyPart.LeftIndex,
-                    BodyPart.LeftMiddle,
-                    BodyPart.LeftRing,
-                    BodyPart.LeftPinky
-                };
-            }
-            else
-            {
-                armParts = new BodyPart[]
-                {
-                    BodyPart.RightShoulder,
-                    BodyPart.RightUpperArm,
-                    BodyPart.RightLowerArm,
-                    BodyPart.RightHand,
-                    BodyPart.RightThumb,
-                    BodyPart.RightIndex,
-                    BodyPart.RightMiddle,
-                    BodyPart.RightRing,
-                    BodyPart.RightPinky
-                };
-            }
-            
-            // 各部位に対してスケールを適用
-            foreach (var part in armParts)
-            {
-                if (bodyPartRenderers.ContainsKey(part))
-                {
-                    foreach (var renderer in bodyPartRenderers[part])
-                    {
-                        if (renderer.transform != null)
-                        {
-                            renderer.transform.localScale *= scale;
-                            
-                            // スキンメッシュレンダラーの場合、ボーンも調整
-                            SkinnedMeshRenderer skinnedRenderer = renderer as SkinnedMeshRenderer;
-                            if (skinnedRenderer != null && skinnedRenderer.bones != null)
-                            {
-                                foreach (var bone in skinnedRenderer.bones)
-                                {
-                                    if (bone != null && IsArmBone(bone.name, isLeft))
-                                    {
-                                        bone.localScale = bone.localScale * scale;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// ボーン名が腕のボーンかどうかを判定
-        /// </summary>
-        private static bool IsArmBone(string boneName, bool isLeft)
-        {
-            string lowerName = boneName.ToLower();
-            
-            bool isLeftBone = lowerName.Contains("left") || lowerName.Contains("l_") || 
-                             lowerName.StartsWith("l.") || lowerName.EndsWith(".l") || lowerName.EndsWith("_l");
-                             
-            bool isRightBone = lowerName.Contains("right") || lowerName.Contains("r_") || 
-                              lowerName.StartsWith("r.") || lowerName.EndsWith(".r") || lowerName.EndsWith("_r");
-                              
-            bool isArmRelated = lowerName.Contains("arm") || lowerName.Contains("hand") || 
-                               lowerName.Contains("shoulder") || lowerName.Contains("forearm") || 
-                               lowerName.Contains("elbow") || lowerName.Contains("wrist") || 
-                               lowerName.Contains("finger") || lowerName.Contains("thumb");
-                               
-            return isArmRelated && ((isLeft && isLeftBone) || (!isLeft && isRightBone));
-        }
-        
-        /// <summary>
-        /// 脚のスケール調整を適用
-        /// </summary>
-        private static void ApplyLegScale(
-            GameObject costumeObject, 
-            Dictionary<BodyPart, List<Renderer>> bodyPartRenderers,
-            bool isLeft,
-            float scale)
-        {
-            // 脚に関連する部位のリスト
-            BodyPart[] legParts;
-            
-            if (isLeft)
-            {
-                legParts = new BodyPart[]
-                {
-                    BodyPart.LeftUpperLeg,
-                    BodyPart.LeftLowerLeg,
-                    BodyPart.LeftFoot,
-                    BodyPart.LeftToes
-                };
-            }
-            else
-            {
-                legParts = new BodyPart[]
-                {
-                    BodyPart.RightUpperLeg,
-                    BodyPart.RightLowerLeg,
-                    BodyPart.RightFoot,
-                    BodyPart.RightToes
-                };
-            }
-            
-            // 各部位に対してスケールを適用
-            foreach (var part in legParts)
-            {
-                if (bodyPartRenderers.ContainsKey(part))
-                {
-                    foreach (var renderer in bodyPartRenderers[part])
-                    {
-                        if (renderer.transform != null)
-                        {
-                            renderer.transform.localScale *= scale;
-                            
-                            // スキンメッシュレンダラーの場合、ボーンも調整
-                            SkinnedMeshRenderer skinnedRenderer = renderer as SkinnedMeshRenderer;
-                            if (skinnedRenderer != null && skinnedRenderer.bones != null)
-                            {
-                                foreach (var bone in skinnedRenderer.bones)
-                                {
-                                    if (bone != null && IsLegBone(bone.name, isLeft))
-                                    {
-                                        bone.localScale = bone.localScale * scale;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// ボーン名が脚のボーンかどうかを判定
-        /// </summary>
-        private static bool IsLegBone(string boneName, bool isLeft)
-        {
-            string lowerName = boneName.ToLower();
-            
-            bool isLeftBone = lowerName.Contains("left") || lowerName.Contains("l_") || 
-                             lowerName.StartsWith("l.") || lowerName.EndsWith(".l") || lowerName.EndsWith("_l");
-                             
-            bool isRightBone = lowerName.Contains("right") || lowerName.Contains("r_") || 
-                              lowerName.StartsWith("r.") || lowerName.EndsWith(".r") || lowerName.EndsWith("_r");
-                              
-            bool isLegRelated = lowerName.Contains("leg") || lowerName.Contains("thigh") || 
-                              lowerName.Contains("calf") || lowerName.Contains("shin") || 
-                              lowerName.Contains("knee") || lowerName.Contains("ankle") || 
-                              lowerName.Contains("foot") || lowerName.Contains("toe");
-                              
-            return isLegRelated && ((isLeft && isLeftBone) || (!isLeft && isRightBone));
-        }
-        
-        /// <summary>
-        /// カスタム部位調整を適用（改良版）
-        /// </summary>
-        private static void ApplyCustomBodyPartAdjustment(
-            GameObject costumeObject,
-            Dictionary<BodyPart, List<Renderer>> bodyPartRenderers,
-            BodyPart bodyPart,
-            BodyPartAdjustment adjustment)
-        {
-            if (!bodyPartRenderers.ContainsKey(bodyPart) || bodyPartRenderers[bodyPart].Count == 0)
-            {
-                return;
-            }
-            
-            // スケールの適用
-            Vector3 scale = adjustment.GetScaleVector();
-            
-            // オフセットの適用
-            Vector3 offset = adjustment.GetOffsetVector();
-            
-            // 回転の適用
-            Quaternion rotation = Quaternion.Euler(adjustment.rotation);
-            
-            // 部位のレンダラーに適用
-            foreach (var renderer in bodyPartRenderers[bodyPart])
-            {
-                if (renderer.transform != null)
-                {
-                    // 元の回転と位置を保存
-                    Quaternion originalRotation = renderer.transform.rotation;
-                    Vector3 originalPosition = renderer.transform.position;
-                    
-                    // 回転を適用
-                    if (adjustment.adjustRotation && adjustment.rotation != Vector3.zero)
-                    {
-                        renderer.transform.rotation = originalRotation * rotation;
-                    }
-                    
-                    // スケールを適用
-                    if (adjustment.adjustScale && scale != Vector3.one)
-                    {
-                        renderer.transform.localScale = Vector3.Scale(renderer.transform.localScale, scale);
-                        
-                        // スキンメッシュレンダラーの場合、ボーンも調整
-                        SkinnedMeshRenderer skinnedRenderer = renderer as SkinnedMeshRenderer;
-                        if (skinnedRenderer != null && skinnedRenderer.bones != null)
-                        {
-                            foreach (var bone in skinnedRenderer.bones)
-                            {
-                                if (bone != null && IsBoneForBodyPart(bone.name, bodyPart))
-                                {
-                                    bone.localScale = Vector3.Scale(bone.localScale, scale);
-                                }
-                            }
-                        }
-                    }
-                    
-                    // オフセットを適用
-                    if (adjustment.adjustPosition && offset != Vector3.zero)
-                    {
-                        renderer.transform.position += offset;
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// ボーン名が指定された体の部位に関連するかを判定
-        /// </summary>
-        private static bool IsBoneForBodyPart(string boneName, BodyPart bodyPart)
-        {
-            string name = boneName.ToLower();
-            BodyPart bonePart = IdentifyBodyPartFromName(name);
-            return bonePart == bodyPart;
-        }
-    }
-}
+## 2. 実装状況
+
+### 2.1 UIコンポーネント
+- ✅ メインエディタウィンドウ
+- ✅ ボーンマッピングタブ
+- ✅ 調整タブ
+- ✅ 設定タブ
+
+### 2.2 ボーンマッピング機能
+- ✅ ボーン識別
+- ✅ 名前ベースのマッピング
+- ✅ 階層ベースのマッピング
+- ✅ 位置ベースのマッピング
+- ✅ マッピング管理
+- ✅ ヒューマノイドリグ取得
+
+### 2.3 調整機能
+- ✅ ボーンベースの調整
+- ✅ メッシュベースの調整
+- ✅ 異なるボーン構造への対応
+- ✅ 微調整機能
+- ✅ 体の部位別調整機能
+- ✅ 調整管理
+
+### 2.4 データモデル
+- ✅ ボーン情報モデル
+- ✅ マッピング情報モデル
+- ✅ 調整設定モデル
+- ✅ データ管理
+
+### 2.5 ユーティリティ
+- ✅ JSON操作ユーティリティ
+- ✅ エディタ関連ユーティリティ
+- ✅ メッシュ操作ユーティリティ
+- ✅ Blender連携ユーティリティ
+
+### 2.6 リソース
+- ✅ アイコンリソース
+- ✅ ボーン命名パターンデータ
+- ✅ 身体部位参照データ
+- ✅ Blender用Pythonスクリプト
+
+### 2.7 プレビュー機能
+- ✅ リアルタイムプレビュー
+- ✅ ボーン可視化
+- ✅ ワイヤーフレーム表示
+- ✅ 自動回転
+
+### 2.8 テスト
+- ❌ ボーン識別のテスト (未実装)
+- ❌ ボーンマッピングのテスト (未実装)
+- ❌ 調整機能のテスト (未実装)
+
+### 2.9 互換性
+- ✅ Unity バージョン互換対応
+  - カスタム DrawWireMesh 実装
+  - GUIStyle 修正
+  - HumanDescription 比較の対応
+
+### 2.10 ボーン収集機能
+- ✅ Armature配下のボーンのみを収集
+- ✅ スキンメッシュボーンの収集
+- ✅ ヒューマノイドボーン情報の統合
+
+### 2.11 異なるボーン構造対応
+- ✅ ボーン構造差異の自動検出
+- ✅ バインドポーズの適切な更新
+- ✅ スキンウェイトの再分配機能
+- ✅ UI設定との連携
+
+### 2.12 新機能と改善点 (2025年3月追加)
+- ✅ ボーン構造差異対応の強化
+- ✅ 自動スケール調整アルゴリズム
+- ✅ 衣装インスタンス管理の改善
+- ✅ 調整設定のクローン機能
+- ✅ 部位別調整の精度向上
+- ✅ UIの使いやすさ改善
+- ✅ 調整のリアルタイム適用オプション
+- ✅ エラー処理の強化
+- ✅ Blender連携機能の実装（2025年3月11日追加）
+
+## 3. 注意点と制限事項
+
+実装されたコードは基本的なフレームワークを提供していますが、実際のUnity環境での詳細な動作検証は行われていません。以下の制限事項があります：
+
+1. **ヒューマノイドリグの取得**：
+   - Unity EditorのAPIを使用したヒューマノイド情報の詳細取得機能が実装されました。
+
+2. **メッシュ変形**：
+   - メッシュベースの調整は基本的なバウンディングボックスベースの簡易実装です。
+   - 詳細なメッシュ形状解析と変形は実装されていません。
+
+3. **リアルタイムプレビュー**：
+   - SceneViewでのリアルタイムプレビュー機能が実装されました。
+   - ボーン可視化とワイヤーフレーム表示機能も追加されました。
+   - 異なるUnityバージョンでの互換性対応を強化しました。
+
+4. **パフォーマンス**：
+   - 大規模なメッシュや複雑なボーン構造でのパフォーマンス最適化が行われました。
+   - レンダラーとボーン識別のキャッシュ機能が追加されました。
+
+5. **ボーン命名パターン**：
+   - 事前定義のボーン命名パターンデータベースは実装されました。
+   - 左右の部位識別が改善されました。
+
+6. **ボーン収集**：
+   - Armatureオブジェクトを検索し、その配下のボーンのみを収集するように最適化されました。
+   - Armatureが見つからない場合は従来通り全てのボーン候補を検索します。
+
+7. **ボーン構造差異対応**：
+   - 異なるボーン構造の自動検出と対応が強化されました。
+   - バインドポーズ更新アルゴリズムが改善されました。
+   - 自動スケール調整機能が追加され、アバターと衣装の比率を自動計算します。
+   - メッシュの「Read/Write Enabled」が有効でない場合、スキンウェイトの再分配機能は制限されます。
+
+8. **調整機能**：
+   - 調整設定の状態管理が改善され、衣装適用後に調整タブでのパラメータ変更が確実に反映されるようになりました。
+   - 部位別調整の精度が向上し、より多くのケースで正確な部位分類が可能になりました。
+   - 自動適用オプションが追加され、値の変更後に自動的に調整が適用されるようになりました。
+
+9. **Blender連携**:
+   - Blenderをインストールしている場合、裏でBlenderを使った処理を自動的に行います。
+   - Blenderの実行ファイルの自動検出機能を実装しました。
+   - FBXファイルの自動エクスポート・インポート機能を実装しました。
+   - Blenderでの処理が失敗した場合にUnity内での処理にフォールバックする機能を実装しました。
+
+## 4. 今後の開発予定
+
+### 4.1 短期的な改善
+- [x] ヒューマノイドリグ取得の詳細実装
+- [x] Unity バージョン互換性の強化
+- [x] ボーン収集の最適化（Armature配下のボーンのみ）
+- [x] 異なるボーン構造への対応機能
+- [x] リアルタイムプレビュー機能の実装
+- [x] ボーン命名パターンデータベースの実装
+- [x] パフォーマンス最適化
+- [x] 調整機能のUIと状態管理の改善
+- [x] Blender連携機能の実装
+- [ ] メッシュ変形アルゴリズムの強化
+
+### 4.2 中期的な開発
+- [ ] バッチ処理による一括適用機能
+- [ ] 衣装のプリセット管理システム
+- [ ] 衣装のクリッピング検出と修正
+- [ ] ボーン影響の可視化ツール
+- [ ] ボディ形状の自動認識機能
+- [ ] 複数メッシュの同時調整の連携
+
+### 4.3 長期的なビジョン
+- [ ] 機械学習を用いたボーン推定
+- [ ] 非人型モデルへの対応拡張
+- [ ] 自動体型判別と推奨衣装サイズの提案
+- [ ] 高度なメッシュ変形アルゴリズムの導入
+- [ ] 複合衣装の管理とレイヤリング
+- [ ] シーン内の複数アバターへの一括適用
+
+## 5. 使用法（概要）
+
+1. Unityエディタで「Tools > Avatar Costume Auto Adjust Tool」を選択
+2. アバターと衣装のオブジェクトをそれぞれ選択
+3. 「ボーンマッピング」タブで自動マッピングを実行
+4. 必要に応じてマッピングを手動調整
+5. 「衣装を着せる」ボタンをクリックして衣装をアバターに適用
+6. 「調整」タブで衣装のフィット感を微調整
+7. 設定をプリセットとして保存
+8. 「プレビュー」機能で結果をリアルタイムで確認
+
+## 6. 機能詳細
+
+### 6.1 ボーンマッピング
+
+ボーンマッピングは、異なるボーン構造を持つアバターと衣装間での対応関係を構築するプロセスです。このツールでは、以下の3つの方法を組み合わせて高精度なマッピングを実現します：
+
+#### 6.1.1 名前ベースのマッピング
+- 様々な命名規則に対応したボーン名の解析
+- Levenshtein距離（編集距離）を用いた名前の類似度計算
+- 左右識別子の標準化による正確なマッチング
+
+#### 6.1.2 階層ベースのマッピング
+- 親子関係に基づく階層的なボーン構造の解析
+- 兄弟ボーンの関係性を考慮したマッピング
+- 部分的なマッピング結果を活用した階層的推論
+
+#### 6.1.3 位置ベースのマッピング
+- 空間的な位置関係に基づくボーンの識別
+- モデルサイズの正規化による適切な比較
+- 体の部位情報を活用した位置的類似性の判定
+
+### 6.2 衣装調整
+
+衣装調整は、マッピングされたボーン情報を基に衣装をアバターに適合させるプロセスです。ツールでは以下の2つの方法を提供します：
+
+#### 6.2.1 ボーンベースの調整
+- スキンメッシュのボーン参照を自動更新
+- ボーン階層構造に基づく適切な配置
+- スキンメッシュレンダラーのボーン配列とバインドポーズの調整
+
+#### 6.2.2 メッシュベースの調整
+- メッシュの形状解析と部位分類
+- バウンディングボックスを用いた基本的な形状適合
+- 部位ごとの個別スケーリングと位置合わせ
+
+### 6.3 異なるボーン構造対応
+
+異なるボーン構造を持つアバターと衣装に対応するための機能です：
+
+- ボーン構造差異の自動検出
+- バインドポーズの適切な再計算
+- スキンウェイトの再分配による正確なボーン影響の保持
+- 階層構造の違いに対応するボーンマッピング修正
+- 自動スケール調整によるサイズ比率の最適化
+
+### 6.4 微調整機能
+
+衣装の基本的な適合後に細かい調整を行うための機能です：
+
+- 全体スケールの調整
+- 上半身/下半身のオフセット調整
+- 左右の腕/脚の個別スケール調整
+- 体の部位ごとの詳細な調整（スケール、オフセット、回転）
+- リアルタイム適用オプション
+- プリセットの保存と読み込み
+
+### 6.5 プレビュー機能
+
+リアルタイムで結果を確認するための機能です：
+
+- SceneViewを使用したリアルタイムプレビュー
+- ボーン構造の可視化
+- ワイヤーフレーム表示（各Unityバージョンに対応）
+- モデルの自動回転
+- カスタマイズ可能な表示設定
+
+### 6.6 ボーン収集機能
+
+アバターと衣装からボーン情報を収集する機能です：
+
+- Armatureオブジェクトの自動検出
+- Armature配下のボーンに限定した収集
+- スキンメッシュに関連するボーンの優先的な収集
+- ヒューマノイドアバター情報との統合
+
+### 6.7 Blender連携機能
+
+Blenderを使って衣装適用の精度を向上させる機能です：
+
+- Blender実行ファイルの自動検出
+- Unity-Blender間のデータ受け渡し
+- Blender Pythonスクリプトによる高精度な衣装適用
+- ユーザーが意識することなく裏で動作
+- Unityでの処理にフォールバックするセーフティメカニズム
+- 設定UIからの有効/無効切り替え
+
+### 6.8 UIの改善とエラー処理
+
+ユーザビリティを向上させる機能です：
+
+- わかりやすいエラーメッセージ表示
+- 設定変更後の自動適用オプション
+- 衣装インスタンスの自動検出
+- 調整設定の保存と読み込み
+- 部位別調整のキャッシュと最適化
+- Blender連携設定のUIと動作テスト機能
+
+## 7. アーキテクチャ
+
+### 7.1 モジュール構成
+
+このツールは以下の主要モジュールで構成されています：
+
+1. **UIモジュール**：ユーザーインターフェース関連のクラス群
+2. **ボーンマッピングモジュール**：ボーン識別とマッピング関連のクラス群
+3. **調整モジュール**：衣装の適合と調整関連のクラス群
+4. **プレビューモジュール**：リアルタイム表示関連のクラス群
+5. **データモジュール**：データモデルとデータ管理のクラス群
+6. **ユーティリティモジュール**：共通機能を提供するユーティリティクラス群
+7. **外部連携モジュール**：Blenderとの連携を管理するクラス群
+
+### 7.2 データフロー
+
+1. **ボーン情報収集**：アバターと衣装からボーン情報を収集
+2. **ボーンマッピング**：収集したボーン情報を基にマッピングを生成
+3. **衣装適用**：マッピング情報を基に衣装をアバターに適用
+   - Unity内部処理またはBlender連携のいずれかを使用
+4. **調整適用**：ユーザーの設定に基づいて衣装を調整
+5. **プレビュー表示**：リアルタイムで結果を表示
+6. **プリセット管理**：調整設定の保存と読み込み
+
+### 7.3 Blender連携のワークフロー
+
+1. **データ準備**：アバターと衣装をFBXとしてエクスポート
+2. **マッピングデータ変換**：ボーンマッピング情報をJSON形式で出力
+3. **Blender処理**：Pythonスクリプトを使ってBlenderで衣装適用処理を実行
+4. **結果インポート**：処理結果をUnityにインポート
+5. **後処理**：Unityで微調整や部位別調整を適用
+
+## 8. 今後の展望
+
+このツールは、VRChatをはじめとするVR空間でのアバターカスタマイズをより簡単かつ柔軟にすることを目指しています。今後は以下の方向性で発展させていく予定です：
+
+1. **ユーザビリティの向上**：より直感的なUIとリアルタイムプレビュー
+2. **対応モデルの拡大**：様々なボーン構造や非人型モデルへの対応
+3. **高度なアルゴリズム導入**：機械学習を用いたボーン推定や高度なメッシュ変形
+4. **コミュニティ機能**：プリセットの共有やユーザー投稿のボーンマッピングデータベース
+5. **外部ツール連携の拡大**：BlenderだけでなくMayaやその他の3Dツールとの連携
+
+これらの展望を通じて、異なるモデル間での衣装共有をさらに容易にし、VR空間でのクリエイティブな表現の幅を広げることを目指します。
+
+## 9. バグ修正と互換性対応
+
+最近実施した主な修正と互換性向上対策：
+
+1. **AdjustmentSettings.bodyPartAdjustments アクセシビリティの修正**
+   - private から public に変更してコード全体からアクセス可能に
+
+2. **BoneData クラスの拡張**
+   - 新しいプロパティ（Name, Path, Type, Position, Rotation, Scale, ParentPath, Children）を追加
+   - HumanoidRigRetriever からの参照を可能に
+
+3. **HumanDescription との比較方法の修正**
+   - null との直接比較からデフォルト値との比較に変更
+
+4. **GUIStyle の互換性対応**
+   - 存在しない width プロパティの使用を除去
+   - GUILayout.Width() を使用する方法に変更
+
+5. **DrawWireMesh メソッドの独自実装**
+   - 特定のUnityバージョンに依存しない互換性のある実装
+   - メッシュの三角形を手動で描画する方法を採用
+
+6. **ボーン収集ロジックの改善**
+   - Armature配下のボーンのみを対象とするよう変更
+   - FindArmature メソッドでArmatureオブジェクトを検索
+   - ボーンマッピングUI上で不要なオブジェクトが表示されなくなる
+
+7. **ボーン構造差異対応機能の強化**
+   - 異なるボーン構造の自動検出機能の精度向上
+   - バインドポーズ更新機能の強化
+   - スキンウェイト再分配機能の改善
+   - 設定UIとの連携強化
+   - 自動スケール調整アルゴリズムの導入
+
+8. **調整機能の改良**
+   - 部位別調整の精度向上
+   - レンダラー分類アルゴリズムの強化
+   - 左右の部位識別精度の向上
+   - キャッシュ機構による性能改善
+   - スキンメッシュの確実な更新機能
+
+9. **エラー修正 (2025年3月11日)**
+   - BoneIdentifier.CollectBones メソッド参照エラーの修正
+   - FineAdjuster.cs の重複変数名エラーの解決
+   - Blender連携時のパス処理の互換性向上
+
+これらの修正により、より広範囲のUnityバージョンでの互換性と安定性が向上し、エラーなく実行できるようになりました。また、ボーンマッピング機能の使いやすさと正確性も大幅に向上しています。さらに、異なるボーン構造を持つアバターと衣装間での適用精度が向上しました。加えて、衣装着用後の調整がより直感的かつ確実に行えるようになりました。Blender連携機能の追加により、特に複雑なボーン構造を持つモデル間での衣装適用の精度が向上しました。
