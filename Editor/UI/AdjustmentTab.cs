@@ -33,10 +33,32 @@ namespace AvatarCostumeAdjustTool
         // 部位選択
         private BodyPart selectedBodyPart = BodyPart.Chest;
         
+        // 高度な設定表示
+        private bool showAdvancedBoneSettings = false;
+        
         // エディタスタイル
         private GUIStyle headerStyle;
         private GUIStyle subHeaderStyle;
         private GUIStyle sliderLabelStyle;
+        
+        // エディタ参照
+        private SettingsTab settingsTab;
+        
+        /// <summary>
+        /// コンストラクタ
+        /// </summary>
+        public AdjustmentTab()
+        {
+            InitializeAdjustmentSettings();
+        }
+        
+        /// <summary>
+        /// 設定タブの参照を設定
+        /// </summary>
+        public void SetSettingsTab(SettingsTab tab)
+        {
+            this.settingsTab = tab;
+        }
         
         /// <summary>
         /// GUIの描画
@@ -56,6 +78,9 @@ namespace AvatarCostumeAdjustTool
             // グローバル調整
             DrawGlobalAdjustmentSection();
             
+            // ボーン構造差異対応設定
+            DrawBoneStructureSettingsSection();
+            
             // 部位別調整
             DrawBodyPartAdjustmentSection();
             
@@ -72,8 +97,11 @@ namespace AvatarCostumeAdjustTool
         {
             if (avatar == null) return;
             
-            // 新しいアバターに対して調整設定を初期化
-            InitializeAdjustmentSettings();
+            // 既存の設定があれば保持
+            if (adjustmentSettings == null)
+            {
+                InitializeAdjustmentSettings();
+            }
         }
         
         /// <summary>
@@ -83,8 +111,11 @@ namespace AvatarCostumeAdjustTool
         {
             if (costume == null) return;
             
-            // 新しい衣装に対して調整設定を初期化
-            InitializeAdjustmentSettings();
+            // 既存の設定があれば保持
+            if (adjustmentSettings == null)
+            {
+                InitializeAdjustmentSettings();
+            }
         }
         
         /// <summary>
@@ -103,6 +134,12 @@ namespace AvatarCostumeAdjustTool
             if (adjustmentSettings == null)
             {
                 InitializeAdjustmentSettings();
+            }
+            
+            // 設定タブから高度な設定を適用（ある場合のみ）
+            if (settingsTab != null)
+            {
+                settingsTab.ApplySettingsToAdjustment(adjustmentSettings);
             }
             
             return adjustmentSettings;
@@ -165,7 +202,14 @@ namespace AvatarCostumeAdjustTool
                 
                 // 脚設定
                 leftLegScale = 1.0f,
-                rightLegScale = 1.0f
+                rightLegScale = 1.0f,
+                
+                // ボーン構造差異対応設定
+                detectStructuralDifferences = true,
+                redistributeWeights = true,
+                adjustScale = true,
+                adjustRotation = true,
+                adjustBindPoses = true
             };
             
             // 各体の部位に対して調整設定を初期化
@@ -243,6 +287,58 @@ namespace AvatarCostumeAdjustTool
             {
                 // プレビュー設定が変更されたときの処理
                 UpdatePreviewSettings();
+            }
+            
+            EditorGUILayout.EndVertical();
+        }
+        
+        /// <summary>
+        /// ボーン構造差異対応設定セクションの描画
+        /// </summary>
+        private void DrawBoneStructureSettingsSection()
+        {
+            if (adjustmentSettings == null || currentMethod != AdjustmentMethod.BoneBased)
+            {
+                return;
+            }
+            
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            
+            // 折りたたみヘッダー
+            showAdvancedBoneSettings = EditorGUILayout.Foldout(showAdvancedBoneSettings, "ボーン構造差異対応設定", true);
+            
+            if (showAdvancedBoneSettings)
+            {
+                EditorGUILayout.HelpBox("アバターと衣装のボーン構成が異なる場合の調整設定です。より詳細な設定は「設定」タブで行えます。", MessageType.Info);
+                
+                // 基本設定
+                adjustmentSettings.detectStructuralDifferences = EditorGUILayout.Toggle("ボーン構造差異の自動検出", adjustmentSettings.detectStructuralDifferences);
+                
+                if (adjustmentSettings.detectStructuralDifferences)
+                {
+                    EditorGUI.indentLevel++;
+                    
+                    adjustmentSettings.adjustBindPoses = EditorGUILayout.Toggle("バインドポーズ調整を適用", adjustmentSettings.adjustBindPoses);
+                    adjustmentSettings.redistributeWeights = EditorGUILayout.Toggle("スキンウェイト再分配を適用", adjustmentSettings.redistributeWeights);
+                    
+                    if (adjustmentSettings.redistributeWeights)
+                    {
+                        EditorGUILayout.HelpBox("スキンウェイトの再分配はメッシュの読み取り権限が必要です。プロジェクト設定で「Read/Write Enabled」が有効になっていることを確認してください。", MessageType.Info);
+                    }
+                    
+                    EditorGUI.indentLevel--;
+                }
+                
+                // 詳細設定へのリンク
+                EditorGUILayout.Space();
+                
+                EditorGUILayout.HelpBox("より詳細な設定は「設定」タブの「ボーン構造差異対応設定」で行えます。", MessageType.Info);
+                
+                if (GUILayout.Button("詳細設定を開く"))
+                {
+                    // メインウィンドウの設定タブを開くように要求
+                    EditorPrefs.SetInt("AvatarCostumeAdjustTool_CurrentTab", 2); // 設定タブのインデックス
+                }
             }
             
             EditorGUILayout.EndVertical();
@@ -390,58 +486,95 @@ namespace AvatarCostumeAdjustTool
             
             BodyPartAdjustment partAdjustment = adjustmentSettings.GetBodyPartAdjustment(selectedBodyPart);
             
-            // スケール調整
-            EditorGUILayout.LabelField("スケール調整", subHeaderStyle);
+            // 部位調整有効/無効設定
+            partAdjustment.isEnabled = EditorGUILayout.Toggle("調整を有効にする", partAdjustment.isEnabled);
             
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("X スケール", GUILayout.Width(120));
-            partAdjustment.scaleX = EditorGUILayout.Slider(partAdjustment.scaleX, 0.5f, 1.5f);
-            EditorGUILayout.EndHorizontal();
-            
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Y スケール", GUILayout.Width(120));
-            partAdjustment.scaleY = EditorGUILayout.Slider(partAdjustment.scaleY, 0.5f, 1.5f);
-            EditorGUILayout.EndHorizontal();
-            
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Z スケール", GUILayout.Width(120));
-            partAdjustment.scaleZ = EditorGUILayout.Slider(partAdjustment.scaleZ, 0.5f, 1.5f);
-            EditorGUILayout.EndHorizontal();
-            
-            if (GUILayout.Button("均一スケール"))
+            if (!partAdjustment.isEnabled)
             {
-                float avgScale = (partAdjustment.scaleX + partAdjustment.scaleY + partAdjustment.scaleZ) / 3f;
-                partAdjustment.scaleX = avgScale;
-                partAdjustment.scaleY = avgScale;
-                partAdjustment.scaleZ = avgScale;
+                EditorGUILayout.HelpBox("この部位の調整は現在無効になっています。", MessageType.Info);
+                
+                if (GUILayout.Button("調整を有効にする"))
+                {
+                    partAdjustment.isEnabled = true;
+                }
+                
+                EditorGUILayout.EndVertical();
+                return;
             }
             
+            // 適用する調整項目の選択
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("適用する調整", subHeaderStyle);
+            
+            partAdjustment.adjustScale = EditorGUILayout.Toggle("スケール調整", partAdjustment.adjustScale);
+            partAdjustment.adjustPosition = EditorGUILayout.Toggle("位置調整", partAdjustment.adjustPosition);
+            partAdjustment.adjustRotation = EditorGUILayout.Toggle("回転調整", partAdjustment.adjustRotation);
+            
+            EditorGUILayout.Space();
+            
+            // スケール調整
+            if (partAdjustment.adjustScale)
+            {
+                EditorGUILayout.LabelField("スケール調整", subHeaderStyle);
+                
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("X スケール", GUILayout.Width(120));
+                partAdjustment.scaleX = EditorGUILayout.Slider(partAdjustment.scaleX, 0.5f, 1.5f);
+                EditorGUILayout.EndHorizontal();
+                
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Y スケール", GUILayout.Width(120));
+                partAdjustment.scaleY = EditorGUILayout.Slider(partAdjustment.scaleY, 0.5f, 1.5f);
+                EditorGUILayout.EndHorizontal();
+                
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Z スケール", GUILayout.Width(120));
+                partAdjustment.scaleZ = EditorGUILayout.Slider(partAdjustment.scaleZ, 0.5f, 1.5f);
+                EditorGUILayout.EndHorizontal();
+                
+                if (GUILayout.Button("均一スケール"))
+                {
+                    float avgScale = (partAdjustment.scaleX + partAdjustment.scaleY + partAdjustment.scaleZ) / 3f;
+                    partAdjustment.scaleX = avgScale;
+                    partAdjustment.scaleY = avgScale;
+                    partAdjustment.scaleZ = avgScale;
+                }
+                
+                EditorGUILayout.Space();
+            }
             
             // 位置調整
-            EditorGUILayout.LabelField("位置調整", subHeaderStyle);
-            
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("X オフセット", GUILayout.Width(120));
-            partAdjustment.offsetX = EditorGUILayout.Slider(partAdjustment.offsetX, -0.1f, 0.1f);
-            EditorGUILayout.EndHorizontal();
-            
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Y オフセット", GUILayout.Width(120));
-            partAdjustment.offsetY = EditorGUILayout.Slider(partAdjustment.offsetY, -0.1f, 0.1f);
-            EditorGUILayout.EndHorizontal();
-            
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Z オフセット", GUILayout.Width(120));
-            partAdjustment.offsetZ = EditorGUILayout.Slider(partAdjustment.offsetZ, -0.1f, 0.1f);
-            EditorGUILayout.EndHorizontal();
-            
-            EditorGUILayout.Space();
+            if (partAdjustment.adjustPosition)
+            {
+                EditorGUILayout.LabelField("位置調整", subHeaderStyle);
+                
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("X オフセット", GUILayout.Width(120));
+                partAdjustment.offsetX = EditorGUILayout.Slider(partAdjustment.offsetX, -0.1f, 0.1f);
+                EditorGUILayout.EndHorizontal();
+                
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Y オフセット", GUILayout.Width(120));
+                partAdjustment.offsetY = EditorGUILayout.Slider(partAdjustment.offsetY, -0.1f, 0.1f);
+                EditorGUILayout.EndHorizontal();
+                
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Z オフセット", GUILayout.Width(120));
+                partAdjustment.offsetZ = EditorGUILayout.Slider(partAdjustment.offsetZ, -0.1f, 0.1f);
+                EditorGUILayout.EndHorizontal();
+                
+                EditorGUILayout.Space();
+            }
             
             // 回転調整
-            EditorGUILayout.LabelField("回転調整", subHeaderStyle);
-            
-            partAdjustment.rotation = EditorGUILayout.Vector3Field("回転 (度)", partAdjustment.rotation);
+            if (partAdjustment.adjustRotation)
+            {
+                EditorGUILayout.LabelField("回転調整", subHeaderStyle);
+                
+                partAdjustment.rotation = EditorGUILayout.Vector3Field("回転 (度)", partAdjustment.rotation);
+                
+                EditorGUILayout.Space();
+            }
             
             // リアルタイム適用ボタン
             if (GUILayout.Button("部位調整を適用"))
@@ -464,6 +597,20 @@ namespace AvatarCostumeAdjustTool
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField("プリセット管理", headerStyle);
+            
+            // プリセット名と説明
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("プリセット名", GUILayout.Width(120));
+            adjustmentSettings.presetName = EditorGUILayout.TextField(adjustmentSettings.presetName);
+            EditorGUILayout.EndHorizontal();
+            
+            EditorGUILayout.LabelField("説明");
+            adjustmentSettings.presetDescription = EditorGUILayout.TextArea(
+                adjustmentSettings.presetDescription,
+                GUILayout.Height(60)
+            );
+            
+            EditorGUILayout.Space();
             
             EditorGUILayout.BeginHorizontal();
             
@@ -493,7 +640,12 @@ namespace AvatarCostumeAdjustTool
         private void UpdatePreviewSettings()
         {
             // SceneViewでのプレビュー表示設定の更新
-            // 実装予定
+            PreviewManager.SetPreviewEnabled(showPreview);
+            PreviewManager.SetPreviewOpacity(previewOpacity);
+            PreviewManager.SetWireframeMode(wireframeMode);
+            
+            // SceneViewの再描画を要求
+            SceneView.RepaintAll();
         }
         
         /// <summary>
@@ -503,8 +655,50 @@ namespace AvatarCostumeAdjustTool
         {
             if (adjustmentSettings == null) return;
             
-            // 選択中のアバターと衣装に対して調整を適用
-            // 実装予定
+            // 設定タブからの設定を適用
+            if (settingsTab != null)
+            {
+                settingsTab.ApplySettingsToAdjustment(adjustmentSettings);
+            }
+            
+            GameObject avatarObject = null;
+            
+            // 現在選択されているオブジェクトがあれば取得
+            if (Selection.activeGameObject != null)
+            {
+                // 選択されたオブジェクトまたはその親からアバターを探す
+                Transform parent = Selection.activeGameObject.transform;
+                while (parent != null)
+                {
+                    // 子オブジェクトに "_Instance" という名前のものがあるかをチェック
+                    foreach (Transform child in parent)
+                    {
+                        if (child.name.EndsWith("_Instance"))
+                        {
+                            avatarObject = parent.gameObject;
+                            break;
+                        }
+                    }
+                    
+                    if (avatarObject != null)
+                        break;
+                        
+                    parent = parent.parent;
+                }
+            }
+            
+            if (avatarObject == null)
+            {
+                Debug.LogWarning("アバターオブジェクトが見つかりませんでした。");
+                return;
+            }
+            
+            // 選択中のアバターに対して調整を適用
+            AdjustmentManager.ApplyFineAdjustment(avatarObject, adjustmentSettings);
+            Debug.Log("調整を適用しました。");
+            
+            // SceneViewの再描画を要求
+            SceneView.RepaintAll();
         }
         
         /// <summary>
@@ -514,8 +708,44 @@ namespace AvatarCostumeAdjustTool
         {
             if (adjustmentSettings == null) return;
             
+            GameObject avatarObject = null;
+            
+            // 現在選択されているオブジェクトがあれば取得
+            if (Selection.activeGameObject != null)
+            {
+                // 選択されたオブジェクトまたはその親からアバターを探す
+                Transform parent = Selection.activeGameObject.transform;
+                while (parent != null)
+                {
+                    // 子オブジェクトに "_Instance" という名前のものがあるかをチェック
+                    foreach (Transform child in parent)
+                    {
+                        if (child.name.EndsWith("_Instance"))
+                        {
+                            avatarObject = parent.gameObject;
+                            break;
+                        }
+                    }
+                    
+                    if (avatarObject != null)
+                        break;
+                        
+                    parent = parent.parent;
+                }
+            }
+            
+            if (avatarObject == null)
+            {
+                Debug.LogWarning("アバターオブジェクトが見つかりませんでした。");
+                return;
+            }
+            
             // 選択中の部位に対して調整を適用
-            // 実装予定
+            AdjustmentManager.ApplyBodyPartAdjustment(avatarObject, selectedBodyPart, adjustmentSettings);
+            Debug.Log($"{selectedBodyPart}の調整を適用しました。");
+            
+            // SceneViewの再描画を要求
+            SceneView.RepaintAll();
         }
         
         /// <summary>
@@ -530,6 +760,8 @@ namespace AvatarCostumeAdjustTool
             
             // 変更を適用
             ApplyBodyPartAdjustments();
+            
+            Debug.Log($"{part}の調整をリセットしました。");
         }
         
         /// <summary>
@@ -559,13 +791,19 @@ namespace AvatarCostumeAdjustTool
             string path = EditorUtility.SaveFilePanel(
                 "調整プリセットを保存",
                 Application.dataPath,
-                "AdjustmentPreset.json",
+                adjustmentSettings.presetName.Length > 0 ? adjustmentSettings.presetName : "AdjustmentPreset",
                 "json");
                 
             if (!string.IsNullOrEmpty(path))
             {
                 try
                 {
+                    // 設定タブからの設定を適用
+                    if (settingsTab != null)
+                    {
+                        settingsTab.ApplySettingsToAdjustment(adjustmentSettings);
+                    }
+                    
                     JsonUtils.SaveToJson(path, adjustmentSettings);
                     Debug.Log($"調整プリセットを保存しました: {path}");
                 }
