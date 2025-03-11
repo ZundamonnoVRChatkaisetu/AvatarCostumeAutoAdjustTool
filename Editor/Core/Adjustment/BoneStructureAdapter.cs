@@ -270,7 +270,7 @@ namespace AvatarCostumeAdjustTool
             foreach (var mapping in mappingData.BoneMappings)
             {
                 // 衣装ボーンID -> アバターボーンID のマッピング
-                idMapping[mapping.CostumeBoneId] = mapping.AvatarBoneId;
+                idMapping[mapping.costumeBoneId] = mapping.avatarBoneId;
             }
 
             return idMapping;
