@@ -127,8 +127,8 @@ namespace AvatarCostumeAdjustTool
         public Vector3 PositionOffset = Vector3.zero;
         public Vector3 RotationOffset = Vector3.zero;
         
-        // 部位別詳細設定
-        private Dictionary<BodyPart, BodyPartAdjustment> bodyPartAdjustments = new Dictionary<BodyPart, BodyPartAdjustment>();
+        // 部位別詳細設定 - privateからpublicに変更
+        public Dictionary<BodyPart, BodyPartAdjustment> bodyPartAdjustments = new Dictionary<BodyPart, BodyPartAdjustment>();
         
         // リスト形式の部位別調整（シリアル化とPreviewManager用）
         private List<BodyPartAdjustment> bodyPartAdjustmentsList = new List<BodyPartAdjustment>();
