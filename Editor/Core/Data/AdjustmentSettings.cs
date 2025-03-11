@@ -10,6 +10,9 @@ namespace AvatarCostumeAdjustTool
     [Serializable]
     public class BodyPartAdjustment
     {
+        // 部位名
+        public string BodyPart;
+        
         // スケール調整
         public float scaleX = 1.0f;
         public float scaleY = 1.0f;
@@ -39,6 +42,7 @@ namespace AvatarCostumeAdjustTool
         {
             if (other == null) return;
             
+            this.BodyPart = other.BodyPart;
             this.scaleX = other.scaleX;
             this.scaleY = other.scaleY;
             this.scaleZ = other.scaleZ;
@@ -81,6 +85,9 @@ namespace AvatarCostumeAdjustTool
         {
             return new Vector3(offsetX, offsetY, offsetZ);
         }
+        
+        // PreviewManager用のプロパティ
+        public Vector3 Scale { get { return GetScaleVector(); } }
     }
 
     /// <summary>
@@ -94,6 +101,9 @@ namespace AvatarCostumeAdjustTool
         
         // グローバル設定
         public float globalScale = 1.0f;
+        
+        // PreviewManager用のプロパティ
+        public float GlobalScale { get { return globalScale; } set { globalScale = value; } }
         
         // 上半身設定
         public float upperBodyOffsetX = 0.0f;
@@ -113,8 +123,18 @@ namespace AvatarCostumeAdjustTool
         public float leftLegScale = 1.0f;
         public float rightLegScale = 1.0f;
         
+        // PreviewManager用の位置・回転プロパティ
+        public Vector3 PositionOffset = Vector3.zero;
+        public Vector3 RotationOffset = Vector3.zero;
+        
         // 部位別詳細設定
-        public Dictionary<BodyPart, BodyPartAdjustment> bodyPartAdjustments = new Dictionary<BodyPart, BodyPartAdjustment>();
+        private Dictionary<BodyPart, BodyPartAdjustment> bodyPartAdjustments = new Dictionary<BodyPart, BodyPartAdjustment>();
+        
+        // リスト形式の部位別調整（シリアル化とPreviewManager用）
+        private List<BodyPartAdjustment> bodyPartAdjustmentsList = new List<BodyPartAdjustment>();
+        
+        // PreviewManager用のプロパティ
+        public List<BodyPartAdjustment> BodyPartAdjustments { get { return bodyPartAdjustmentsList; } }
         
         // プリセット情報
         public string presetName = "";
@@ -152,14 +172,21 @@ namespace AvatarCostumeAdjustTool
             this.leftLegScale = other.leftLegScale;
             this.rightLegScale = other.rightLegScale;
             
+            this.PositionOffset = other.PositionOffset;
+            this.RotationOffset = other.RotationOffset;
+            
             this.presetName = other.presetName;
             this.presetDescription = other.presetDescription;
             
             // 部位別調整のディープコピー
             this.bodyPartAdjustments = new Dictionary<BodyPart, BodyPartAdjustment>();
+            this.bodyPartAdjustmentsList = new List<BodyPartAdjustment>();
+            
             foreach (var kvp in other.bodyPartAdjustments)
             {
-                this.bodyPartAdjustments[kvp.Key] = new BodyPartAdjustment(kvp.Value);
+                var adjustment = new BodyPartAdjustment(kvp.Value);
+                this.bodyPartAdjustments[kvp.Key] = adjustment;
+                this.bodyPartAdjustmentsList.Add(adjustment);
             }
         }
         
@@ -169,11 +196,15 @@ namespace AvatarCostumeAdjustTool
         private void InitializeBodyPartAdjustments()
         {
             bodyPartAdjustments.Clear();
+            bodyPartAdjustmentsList.Clear();
             
             // 各体の部位の調整設定を初期化
             foreach (BodyPart part in Enum.GetValues(typeof(BodyPart)))
             {
-                bodyPartAdjustments[part] = new BodyPartAdjustment();
+                var adjustment = new BodyPartAdjustment();
+                adjustment.BodyPart = part.ToString();
+                bodyPartAdjustments[part] = adjustment;
+                bodyPartAdjustmentsList.Add(adjustment);
             }
         }
         
@@ -200,7 +231,10 @@ namespace AvatarCostumeAdjustTool
         {
             if (!bodyPartAdjustments.ContainsKey(part))
             {
-                bodyPartAdjustments[part] = new BodyPartAdjustment();
+                var adjustment = new BodyPartAdjustment();
+                adjustment.BodyPart = part.ToString();
+                bodyPartAdjustments[part] = adjustment;
+                bodyPartAdjustmentsList.Add(adjustment);
             }
             
             return bodyPartAdjustments[part];
@@ -227,6 +261,9 @@ namespace AvatarCostumeAdjustTool
             
             leftLegScale = 1.0f;
             rightLegScale = 1.0f;
+            
+            PositionOffset = Vector3.zero;
+            RotationOffset = Vector3.zero;
             
             // 部位別調整をリセット
             foreach (var part in bodyPartAdjustments.Keys)
