@@ -183,11 +183,11 @@ namespace AvatarCostumeAdjustTool
                     if (skinnedRenderer.rootBone != null)
                     {
                         string rootName = skinnedRenderer.rootBone.name.ToLower();
-                        BodyPart identifiedPart = IdentifyBodyPartFromName(rootName);
+                        BodyPart detectedPart = IdentifyBodyPartFromName(rootName);
                         
-                        if (identifiedPart != BodyPart.Unknown)
+                        if (detectedPart != BodyPart.Unknown)
                         {
-                            result[identifiedPart].Add(renderer);
+                            result[detectedPart].Add(renderer);
                             continue;
                         }
                     }
@@ -227,11 +227,11 @@ namespace AvatarCostumeAdjustTool
                                 if (bone != null)
                                 {
                                     string boneName = bone.name.ToLower();
-                                    BodyPart identifiedPart = IdentifyBodyPartFromName(boneName);
+                                    BodyPart detectedPart = IdentifyBodyPartFromName(boneName);
                                     
-                                    if (identifiedPart != BodyPart.Unknown)
+                                    if (detectedPart != BodyPart.Unknown)
                                     {
-                                        result[identifiedPart].Add(renderer);
+                                        result[detectedPart].Add(renderer);
                                         continue;
                                     }
                                 }
@@ -242,11 +242,11 @@ namespace AvatarCostumeAdjustTool
                 
                 // 名前から部位を推定（レンダラーの名前）
                 string name = renderer.name.ToLower();
-                BodyPart identifiedPart = IdentifyBodyPartFromName(name);
+                BodyPart detectedBodyPart = IdentifyBodyPartFromName(name);
                 
-                if (identifiedPart != BodyPart.Unknown)
+                if (detectedBodyPart != BodyPart.Unknown)
                 {
-                    result[identifiedPart].Add(renderer);
+                    result[detectedBodyPart].Add(renderer);
                     continue;
                 }
                 
@@ -254,11 +254,11 @@ namespace AvatarCostumeAdjustTool
                 if (renderer.transform.parent != null)
                 {
                     string parentName = renderer.transform.parent.name.ToLower();
-                    identifiedPart = IdentifyBodyPartFromName(parentName);
+                    BodyPart parentBodyPart = IdentifyBodyPartFromName(parentName);
                     
-                    if (identifiedPart != BodyPart.Unknown)
+                    if (parentBodyPart != BodyPart.Unknown)
                     {
-                        result[identifiedPart].Add(renderer);
+                        result[parentBodyPart].Add(renderer);
                         continue;
                     }
                 }
@@ -751,8 +751,8 @@ namespace AvatarCostumeAdjustTool
         private static bool IsBoneForBodyPart(string boneName, BodyPart bodyPart)
         {
             string name = boneName.ToLower();
-            BodyPart identifiedPart = IdentifyBodyPartFromName(name);
-            return identifiedPart == bodyPart;
+            BodyPart bonePart = IdentifyBodyPartFromName(name);
+            return bonePart == bodyPart;
         }
     }
 }
