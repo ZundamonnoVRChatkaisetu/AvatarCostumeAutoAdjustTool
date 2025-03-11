@@ -144,7 +144,7 @@ namespace AvatarCostumeAdjustTool
             renderer.bones = newBones;
             
             // 新しいバインドポーズをメッシュに適用
-            Mesh meshCopy = Instantiate(sharedMesh);
+            Mesh meshCopy = UnityEngine.Object.Instantiate(sharedMesh);
             meshCopy.name = sharedMesh.name + "_Adapted";
             meshCopy.bindposes = newBindPoses;
             renderer.sharedMesh = meshCopy;
