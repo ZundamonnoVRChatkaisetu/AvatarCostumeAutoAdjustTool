@@ -35,7 +35,7 @@ namespace AvatarCostumeAdjustTool
             bool hasDifferentBoneStructure = AnalyzeBoneStructureDifferences(avatarBones, costumeBones, mappingData);
             
             // 1. スケルトン構造の調整
-            AdjustSkeletonStructure(avatarObject, costumeObject, avatarBones, costumeBones, mappingData);
+            AdjustSkeletonStructure(avatarObject, costumeObject, avatarBones, costumeBones, mappingData, settings);
             
             // 2. スキンメッシュの調整
             if (hasDifferentBoneStructure)
@@ -90,11 +90,11 @@ namespace AvatarCostumeAdjustTool
             
             // 重要なパーツの存在の違いをチェック
             HashSet<BodyPart> avatarParts = new HashSet<BodyPart>(
-                avatarBones.Where(b => b.bodyPart != BodyPart.Unknown)
+                avatarBones.Where(b => b.bodyPart != BodyPart.Unknown && b.bodyPart != BodyPart.Other)
                            .Select(b => b.bodyPart));
                            
             HashSet<BodyPart> costumeParts = new HashSet<BodyPart>(
-                costumeBones.Where(b => b.bodyPart != BodyPart.Unknown)
+                costumeBones.Where(b => b.bodyPart != BodyPart.Unknown && b.bodyPart != BodyPart.Other)
                             .Select(b => b.bodyPart));
             
             // 重要なパーツの存在差をチェック
@@ -179,7 +179,8 @@ namespace AvatarCostumeAdjustTool
             GameObject costumeObject,
             List<BoneData> avatarBones,
             List<BoneData> costumeBones,
-            MappingData mappingData)
+            MappingData mappingData,
+            AdjustmentSettings settings)
         {
             // ボーン参照の辞書を作成
             Dictionary<string, Transform> avatarBoneDict = new Dictionary<string, Transform>();
@@ -280,12 +281,12 @@ namespace AvatarCostumeAdjustTool
                                 costumeBone.transform.position = avatarBone.transform.position;
                                 
                                 // スケールと回転の調整（必要に応じて）
-                                if (settings.adjustRotation)
+                                if (settings != null && settings.adjustRotation)
                                 {
                                     costumeBone.transform.rotation = avatarBone.transform.rotation;
                                 }
                                 
-                                if (settings.adjustScale)
+                                if (settings != null && settings.adjustScale)
                                 {
                                     // アバターと衣装のスケール比を計算
                                     float scaleRatio = avatarBone.transform.lossyScale.magnitude / 
@@ -492,10 +493,11 @@ namespace AvatarCostumeAdjustTool
                     continue;
                 
                 // 各部位調整を適用
-                foreach (var adjustment in settings.bodyPartAdjustments)
+                foreach (var kvp in settings.bodyPartAdjustments)
                 {
                     // 部位に対応するボーンを特定
-                    Transform targetBone = FindBoneForBodyPart(renderer, adjustment.bodyPart);
+                    Transform targetBone = FindBoneForBodyPart(renderer, kvp.Key);
+                    BodyPartAdjustment adjustment = kvp.Value;
                     
                     if (targetBone != null)
                     {
@@ -592,6 +594,8 @@ namespace AvatarCostumeAdjustTool
                     return new[] { "l_foot", "left_foot" };
                 case BodyPart.RightFoot:
                     return new[] { "r_foot", "right_foot" };
+                case BodyPart.Unknown:
+                case BodyPart.Other:
                 default:
                     return new string[0];
             }
