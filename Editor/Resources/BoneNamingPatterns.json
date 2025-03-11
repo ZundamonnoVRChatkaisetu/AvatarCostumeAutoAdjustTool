@@ -1,0 +1,165 @@
+{
+  "Patterns": [
+    {
+      "Type": "Hips",
+      "Patterns": ["hip", "pelvis", "root", "waist", "cog", "lowerBody"],
+      "Prefixes": [],
+      "Suffixes": [],
+      "IsPaired": false
+    },
+    {
+      "Type": "Spine",
+      "Patterns": ["spine", "chest", "torso", "body", "upperBody"],
+      "Prefixes": [],
+      "Suffixes": ["1", "2", "3", "Lower", "Upper", "Mid"],
+      "IsPaired": false
+    },
+    {
+      "Type": "Neck",
+      "Patterns": ["neck"],
+      "Prefixes": [],
+      "Suffixes": ["1", "2", "Lower", "Upper"],
+      "IsPaired": false
+    },
+    {
+      "Type": "Head",
+      "Patterns": ["head", "face", "skull"],
+      "Prefixes": [],
+      "Suffixes": [],
+      "IsPaired": false
+    },
+    {
+      "Type": "Shoulder",
+      "Patterns": ["shoulder", "clavicle", "collarbone"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "UpperArm",
+      "Patterns": ["upperarm", "arm", "bicep", "upperArm"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "LowerArm",
+      "Patterns": ["lowerarm", "forearm", "elbow", "lowerArm"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Hand",
+      "Patterns": ["hand", "wrist", "palm"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Thumb",
+      "Patterns": ["thumb", "thumb1", "thumb2", "thumb3", "thumbProximal", "thumbIntermediate", "thumbDistal"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right", "1", "2", "3", "01", "02", "03", "Proximal", "Intermediate", "Distal"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Index",
+      "Patterns": ["index", "indexFinger", "index1", "index2", "index3", "indexProximal", "indexIntermediate", "indexDistal"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right", "1", "2", "3", "01", "02", "03", "Proximal", "Intermediate", "Distal"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Middle",
+      "Patterns": ["middle", "middleFinger", "middle1", "middle2", "middle3", "middleProximal", "middleIntermediate", "middleDistal"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right", "1", "2", "3", "01", "02", "03", "Proximal", "Intermediate", "Distal"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Ring",
+      "Patterns": ["ring", "ringFinger", "ring1", "ring2", "ring3", "ringProximal", "ringIntermediate", "ringDistal"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right", "1", "2", "3", "01", "02", "03", "Proximal", "Intermediate", "Distal"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Pinky",
+      "Patterns": ["pinky", "little", "littleFinger", "pinky1", "pinky2", "pinky3", "pinkyProximal", "pinkyIntermediate", "pinkyDistal"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right", "1", "2", "3", "01", "02", "03", "Proximal", "Intermediate", "Distal"],
+      "IsPaired": true
+    },
+    {
+      "Type": "UpperLeg",
+      "Patterns": ["upperleg", "thigh", "leg", "upperLeg"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "LowerLeg",
+      "Patterns": ["lowerleg", "shin", "calf", "knee", "lowerLeg"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Foot",
+      "Patterns": ["foot", "ankle"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Toes",
+      "Patterns": ["toes", "toe"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Chest",
+      "Patterns": ["chest", "breast", "bust"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Eye",
+      "Patterns": ["eye", "eyeball"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Jaw",
+      "Patterns": ["jaw", "chin", "mouth"],
+      "Prefixes": [],
+      "Suffixes": [],
+      "IsPaired": false
+    },
+    {
+      "Type": "Tail",
+      "Patterns": ["tail"],
+      "Prefixes": [],
+      "Suffixes": ["1", "2", "3", "4", "5", "01", "02", "03", "04", "05"],
+      "IsPaired": false
+    },
+    {
+      "Type": "Ear",
+      "Patterns": ["ear"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    },
+    {
+      "Type": "Wing",
+      "Patterns": ["wing"],
+      "Prefixes": ["l", "r", "left", "right"],
+      "Suffixes": ["_l", "_r", ".l", ".r", "_left", "_right"],
+      "IsPaired": true
+    }
+  ]
+}
