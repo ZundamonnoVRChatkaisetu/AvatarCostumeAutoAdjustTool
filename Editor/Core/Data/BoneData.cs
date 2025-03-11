@@ -73,6 +73,16 @@ namespace AvatarCostumeAdjustTool
         // Unity参照
         [NonSerialized]
         public Transform transform;    // 対応するTransform
+
+        // HumanoidRigRetrieverで使用されるプロパティ
+        public string Name { get { return name; } set { name = value; } }
+        public string Path { get { return hierarchyPath; } set { hierarchyPath = value; } }
+        public string Type { get; set; } // ボーンタイプ（追加）
+        public Vector3 Position { get; set; } // ワールド座標（追加）
+        public Vector3 Rotation { get; set; } // オイラー角（追加）
+        public Vector3 Scale { get { return localScale; } set { localScale = value; } }
+        public string ParentPath { get; set; } // 親パス（追加）
+        public List<string> Children { get; set; } // 子ボーンパス（追加）
         
         /// <summary>
         /// デフォルトコンストラクタ
@@ -82,6 +92,7 @@ namespace AvatarCostumeAdjustTool
             id = Guid.NewGuid().ToString();
             childrenIds = new List<string>();
             bodyPart = BodyPart.Other;
+            Children = new List<string>();
         }
         
         /// <summary>
@@ -107,6 +118,13 @@ namespace AvatarCostumeAdjustTool
             // ルートボーンかどうかを判定
             isRoot = boneTransform.parent == null || 
                      boneTransform.parent.GetComponent<Animator>() != null;
+
+            // 追加のプロパティを初期化
+            Position = boneTransform.position;
+            Rotation = boneTransform.rotation.eulerAngles;
+            Type = "";
+            ParentPath = "";
+            Children = new List<string>();
         }
         
         /// <summary>
@@ -289,7 +307,8 @@ namespace AvatarCostumeAdjustTool
             var result = new Dictionary<string, BoneData>();
             var humanDescription = HumanUtility.GetHumanDescription(animator);
             
-            if (humanDescription == null)
+            // 修正: null比較のエラーを修正
+            if (humanDescription.Equals(default(HumanDescription)))
             {
                 return result;
             }
