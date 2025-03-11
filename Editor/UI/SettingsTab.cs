@@ -44,6 +44,11 @@ namespace AvatarCostumeAdjustTool
         private bool maintainBoneHierarchy = true;
         private float confidenceThreshold = 0.3f;
         
+        // Blender連携設定
+        private bool useBlenderBridge = true;
+        private string blenderPath = "";
+        private bool showBlenderSettings = false;
+        
         // エディタスタイル
         private GUIStyle headerStyle;
         private GUIStyle subHeaderStyle;
@@ -68,6 +73,9 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.Space(10);
             
             DrawBoneStructureSettings();
+            EditorGUILayout.Space(10);
+            
+            DrawBlenderSettings();
             EditorGUILayout.Space(10);
             
             DrawAdvancedSettings();
@@ -299,6 +307,149 @@ namespace AvatarCostumeAdjustTool
         }
         
         /// <summary>
+        /// Blender連携設定セクションの描画
+        /// </summary>
+        private void DrawBlenderSettings()
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            
+            // 折りたたみヘッダー
+            showBlenderSettings = EditorGUILayout.Foldout(showBlenderSettings, "Blender連携設定", true, EditorStyles.foldoutHeader);
+            
+            if (showBlenderSettings)
+            {
+                EditorGUILayout.HelpBox(
+                    "Blenderを使用して衣装適用の精度を向上させます。" +
+                    "Blenderがインストールされている場合、自動的に検出されますが、" +
+                    "手動で指定することもできます。", 
+                    MessageType.Info);
+                
+                EditorGUILayout.Space(5);
+                
+                // Blender連携の有効/無効
+                bool newUseBlender = EditorGUILayout.Toggle("Blender連携を使用", useBlenderBridge);
+                if (newUseBlender != useBlenderBridge)
+                {
+                    useBlenderBridge = newUseBlender;
+                    AdjustmentManager.SetUseBlenderBridge(useBlenderBridge);
+                }
+                
+                EditorGUI.BeginDisabledGroup(!useBlenderBridge);
+                
+                // Blenderパスの表示と設定
+                EditorGUILayout.BeginHorizontal();
+                
+                // 現在のBlenderパスを取得
+                if (string.IsNullOrEmpty(blenderPath))
+                {
+                    blenderPath = BlenderBridge.GetBlenderPath();
+                }
+                
+                EditorGUILayout.LabelField("Blenderの実行ファイル", GUILayout.Width(150));
+                blenderPath = EditorGUILayout.TextField(blenderPath);
+                
+                if (GUILayout.Button("...", GUILayout.Width(30)))
+                {
+                    string path = EditorUtility.OpenFilePanel(
+                        "Blenderの実行ファイルを選択", 
+                        "", 
+                        Application.platform == RuntimePlatform.WindowsEditor ? "exe" : "");
+                    
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        blenderPath = path;
+                        BlenderBridge.SetBlenderPath(blenderPath);
+                    }
+                }
+                
+                EditorGUILayout.EndHorizontal();
+                
+                if (string.IsNullOrEmpty(blenderPath) || !File.Exists(blenderPath))
+                {
+                    EditorGUILayout.HelpBox(
+                        "Blenderの実行ファイルが見つかりません。Blenderをインストールしていない場合は、" +
+                        "インストールするか、Blender連携を無効にしてください。", 
+                        MessageType.Warning);
+                }
+                
+                // Blenderのテスト実行ボタン
+                if (GUILayout.Button("Blender連携をテスト"))
+                {
+                    TestBlenderIntegration();
+                }
+                
+                EditorGUILayout.Space(5);
+                
+                EditorGUILayout.LabelField("動作説明", subHeaderStyle);
+                EditorGUILayout.HelpBox(
+                    "有効にすると、衣装適用時に裏でBlenderを使った処理が自動的に行われます。" +
+                    "これにより、複雑なボーン構造でも正確に衣装を適用できます。" +
+                    "なお、Blenderが見つからない場合や処理に失敗した場合は、" +
+                    "自動的にUnity内での処理にフォールバックします。", 
+                    MessageType.Info);
+                
+                if (GUILayout.Button("一時ファイルをクリーンアップ"))
+                {
+                    BlenderBridge.CleanupTempFiles();
+                    EditorUtility.DisplayDialog("完了", "一時ファイルをクリーンアップしました", "OK");
+                }
+                
+                EditorGUI.EndDisabledGroup();
+            }
+            
+            EditorGUILayout.EndVertical();
+        }
+        
+        /// <summary>
+        /// Blender連携のテスト
+        /// </summary>
+        private void TestBlenderIntegration()
+        {
+            try
+            {
+                // Blenderの初期化を試みる
+                bool initialized = BlenderBridge.Initialize();
+                
+                if (!initialized)
+                {
+                    EditorUtility.DisplayDialog(
+                        "Blender連携テスト", 
+                        "Blender連携機能の初期化に失敗しました。\n" +
+                        "Blenderのパスが正しいか確認してください。", 
+                        "OK");
+                    return;
+                }
+                
+                // Blenderのパスが正しいか確認
+                string blenderPath = BlenderBridge.GetBlenderPath();
+                if (string.IsNullOrEmpty(blenderPath) || !File.Exists(blenderPath))
+                {
+                    EditorUtility.DisplayDialog(
+                        "Blender連携テスト", 
+                        "Blenderの実行ファイルが見つかりませんでした。\n" +
+                        "Blenderのパスを正しく設定してください。", 
+                        "OK");
+                    return;
+                }
+                
+                // テスト成功
+                EditorUtility.DisplayDialog(
+                    "Blender連携テスト", 
+                    $"Blender連携テストに成功しました！\n" +
+                    $"Blenderの実行ファイル: {blenderPath}\n\n" +
+                    "Blender連携機能は正常に動作しています。", 
+                    "OK");
+            }
+            catch (Exception ex)
+            {
+                EditorUtility.DisplayDialog(
+                    "Blender連携テスト", 
+                    $"Blender連携テスト中にエラーが発生しました：\n{ex.Message}", 
+                    "OK");
+            }
+        }
+        
+        /// <summary>
         /// 高度な設定セクションの描画
         /// </summary>
         private void DrawAdvancedSettings()
@@ -347,7 +498,7 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.LabelField("ツール情報", headerStyle);
             
             EditorGUILayout.LabelField("全アバター衣装自動調整ツール", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("バージョン: 1.0.0");
+            EditorGUILayout.LabelField("バージョン: 1.1.0");
             EditorGUILayout.LabelField("作者: VRChat衣装調整ツール開発チーム");
             
             EditorGUILayout.Space();
@@ -424,7 +575,11 @@ namespace AvatarCostumeAdjustTool
                 adjustBindPoses = this.adjustBindPoses,
                 forceUpdateBindPoses = this.forceUpdateBindPoses,
                 maintainBoneHierarchy = this.maintainBoneHierarchy,
-                confidenceThreshold = this.confidenceThreshold
+                confidenceThreshold = this.confidenceThreshold,
+                
+                // Blender連携設定
+                useBlenderBridge = this.useBlenderBridge,
+                blenderPath = this.blenderPath
             };
             
             try
@@ -432,6 +587,13 @@ namespace AvatarCostumeAdjustTool
                 string settingsPath = GetSettingsFilePath();
                 JsonUtils.SaveToJson(settingsPath, settings);
                 Debug.Log("設定を保存しました: " + settingsPath);
+                
+                // 設定を適用
+                AdjustmentManager.SetUseBlenderBridge(useBlenderBridge);
+                if (!string.IsNullOrEmpty(blenderPath))
+                {
+                    BlenderBridge.SetBlenderPath(blenderPath);
+                }
             }
             catch (Exception ex)
             {
@@ -490,6 +652,18 @@ namespace AvatarCostumeAdjustTool
                     if (settings.confidenceThreshold.HasValue)
                         this.confidenceThreshold = settings.confidenceThreshold.Value;
                     
+                    // Blender連携設定
+                    this.useBlenderBridge = settings.useBlenderBridge;
+                    if (!string.IsNullOrEmpty(settings.blenderPath))
+                        this.blenderPath = settings.blenderPath;
+                    
+                    // 設定を適用
+                    AdjustmentManager.SetUseBlenderBridge(useBlenderBridge);
+                    if (!string.IsNullOrEmpty(blenderPath))
+                    {
+                        BlenderBridge.SetBlenderPath(blenderPath);
+                    }
+                    
                     Debug.Log("設定を読み込みました: " + settingsPath);
                 }
             }
@@ -538,6 +712,13 @@ namespace AvatarCostumeAdjustTool
                 forceUpdateBindPoses = false;
                 maintainBoneHierarchy = true;
                 confidenceThreshold = 0.3f;
+                
+                // Blender連携設定
+                useBlenderBridge = true;
+                blenderPath = BlenderBridge.GetBlenderPath();
+                
+                // 設定を適用
+                AdjustmentManager.SetUseBlenderBridge(useBlenderBridge);
                 
                 Debug.Log("すべての設定をリセットしました。");
             }
@@ -624,5 +805,9 @@ namespace AvatarCostumeAdjustTool
         public bool? forceUpdateBindPoses;
         public bool? maintainBoneHierarchy;
         public float? confidenceThreshold;
+        
+        // Blender連携設定
+        public bool useBlenderBridge = true;
+        public string blenderPath = "";
     }
 }
