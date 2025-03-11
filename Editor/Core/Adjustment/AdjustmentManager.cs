@@ -14,6 +14,9 @@ namespace AvatarCostumeAdjustTool
         // 調整中の衣装インスタンス
         private static GameObject costumeInstance;
         
+        // 最後に調整を適用したアバターオブジェクト
+        private static GameObject lastAvatarObject;
+        
         // 元の衣装データのバックアップ
         private static Dictionary<string, Vector3> originalPositions = new Dictionary<string, Vector3>();
         private static Dictionary<string, Quaternion> originalRotations = new Dictionary<string, Quaternion>();
@@ -22,6 +25,9 @@ namespace AvatarCostumeAdjustTool
         // メッシュバックアップ (バインドポーズの復元用)
         private static Dictionary<string, Matrix4x4[]> originalBindPoses = new Dictionary<string, Matrix4x4[]>();
         private static Dictionary<string, BoneWeight[]> originalBoneWeights = new Dictionary<string, BoneWeight[]>();
+        
+        // 最後に適用した調整設定を保存
+        private static AdjustmentSettings lastAdjustmentSettings;
 
         /// <summary>
         /// 衣装を適用する
@@ -56,6 +62,22 @@ namespace AvatarCostumeAdjustTool
             
             try
             {
+                // アバターと衣装のボーン情報を収集
+                List<BoneData> avatarBones = BoneIdentifier.CollectBones(avatarObject);
+                List<BoneData> costumeBones = BoneIdentifier.CollectBones(costumeObject);
+                
+                // ボーン構造の自動適応処理を実行（設定が有効な場合）
+                if (settings.detectStructuralDifferences)
+                {
+                    BoneStructureAdapter.AdaptToDifferentBoneStructure(
+                        avatarObject, 
+                        costumeInstance, 
+                        mappingData, 
+                        avatarBones, 
+                        costumeBones
+                    );
+                }
+                
                 // 調整方法に応じて処理を分岐
                 if (settings.method == "BoneBased")
                 {
@@ -68,6 +90,13 @@ namespace AvatarCostumeAdjustTool
                 
                 // 体の部位別調整の適用（全ての部位に適用）
                 ApplyAllBodyPartAdjustments(avatarObject, settings);
+                
+                // スキニングデータを確実に更新
+                UpdateSkinnedMeshData(costumeInstance);
+                
+                // 最後に適用したアバターと設定を保存
+                lastAvatarObject = avatarObject;
+                lastAdjustmentSettings = settings.Clone();
             }
             catch (Exception ex)
             {
@@ -90,13 +119,32 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         public static void ApplyFineAdjustment(GameObject avatarObject, AdjustmentSettings settings)
         {
-            if (avatarObject == null || costumeInstance == null || settings == null)
+            if (avatarObject == null || settings == null)
             {
                 Debug.LogError("微調整に必要なオブジェクトが不足しています。");
                 return;
             }
             
+            // 衣装インスタンスを取得または探す
+            GameObject costume = costumeInstance;
+            if (costume == null || !costume.activeInHierarchy)
+            {
+                costume = FindCostumeInstance(avatarObject);
+                if (costume == null)
+                {
+                    Debug.LogError("衣装インスタンスが見つかりません。先に「衣装を着せる」を実行してください。");
+                    EditorUtility.DisplayDialog("エラー", 
+                        "衣装インスタンスが見つかりません。先に「衣装を着せる」を実行してください。", "OK");
+                    return;
+                }
+                costumeInstance = costume;
+            }
+            
             FineAdjuster.ApplyAdjustment(avatarObject, costumeInstance, settings);
+            
+            // 最後に適用したアバターと設定を保存
+            lastAvatarObject = avatarObject;
+            lastAdjustmentSettings = settings.Clone();
             
             // エディタの更新を要求
             EditorUtility.SetDirty(avatarObject);
@@ -126,7 +174,7 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         public static void ApplyBodyPartAdjustment(GameObject avatarObject, BodyPart bodyPart, AdjustmentSettings settings)
         {
-            if (avatarObject == null || costumeInstance == null || settings == null)
+            if (avatarObject == null || settings == null)
             {
                 Debug.LogError("部位別調整に必要なオブジェクトが不足しています。");
                 return;
@@ -138,7 +186,26 @@ namespace AvatarCostumeAdjustTool
                 return;
             }
             
+            // 衣装インスタンスを取得または探す
+            GameObject costume = costumeInstance;
+            if (costume == null || !costume.activeInHierarchy)
+            {
+                costume = FindCostumeInstance(avatarObject);
+                if (costume == null)
+                {
+                    Debug.LogError("衣装インスタンスが見つかりません。先に「衣装を着せる」を実行してください。");
+                    EditorUtility.DisplayDialog("エラー", 
+                        "衣装インスタンスが見つかりません。先に「衣装を着せる」を実行してください。", "OK");
+                    return;
+                }
+                costumeInstance = costume;
+            }
+            
             BodyPartAdjuster.ApplyAdjustment(avatarObject, costumeInstance, bodyPart, settings);
+            
+            // 最後に適用したアバターと設定を保存
+            lastAvatarObject = avatarObject;
+            lastAdjustmentSettings = settings.Clone();
             
             // エディタの更新を要求
             EditorUtility.SetDirty(avatarObject);
@@ -150,10 +217,23 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         public static void ResetAdjustment(GameObject avatarObject)
         {
-            if (avatarObject == null || costumeInstance == null)
+            if (avatarObject == null)
             {
                 Debug.LogError("リセットに必要なオブジェクトが不足しています。");
                 return;
+            }
+            
+            // 衣装インスタンスを取得または探す
+            GameObject costume = costumeInstance;
+            if (costume == null || !costume.activeInHierarchy)
+            {
+                costume = FindCostumeInstance(avatarObject);
+                if (costume == null)
+                {
+                    Debug.LogError("衣装インスタンスが見つかりません。");
+                    return;
+                }
+                costumeInstance = costume;
             }
             
             // 元の状態に戻す
@@ -162,6 +242,35 @@ namespace AvatarCostumeAdjustTool
             // エディタの更新を要求
             EditorUtility.SetDirty(avatarObject);
             SceneView.RepaintAll();
+        }
+        
+        /// <summary>
+        /// スキニングデータを確実に更新
+        /// </summary>
+        private static void UpdateSkinnedMeshData(GameObject costumeObject)
+        {
+            if (costumeObject == null) return;
+            
+            SkinnedMeshRenderer[] renderers = costumeObject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            foreach(var renderer in renderers)
+            {
+                if (renderer != null && renderer.sharedMesh != null)
+                {
+                    // バインドポーズを再設定して強制的に更新
+                    Matrix4x4[] bindPoses = renderer.sharedMesh.bindposes;
+                    renderer.sharedMesh.bindposes = bindPoses;
+                    
+                    // レンダラーを一度リセットして更新を強制
+                    Transform rootBone = renderer.rootBone;
+                    Transform[] bones = renderer.bones;
+                    
+                    renderer.rootBone = null;
+                    renderer.rootBone = rootBone;
+                    
+                    renderer.bones = null;
+                    renderer.bones = bones;
+                }
+            }
         }
         
         /// <summary>
@@ -192,6 +301,26 @@ namespace AvatarCostumeAdjustTool
                     GameObject.DestroyImmediate(child.gameObject);
                 }
             }
+        }
+        
+        /// <summary>
+        /// 衣装インスタンスを探す
+        /// </summary>
+        private static GameObject FindCostumeInstance(GameObject avatarObject)
+        {
+            if (avatarObject == null) return null;
+            
+            // アバターの子から "_Instance" が付くオブジェクトを検索
+            for (int i = 0; i < avatarObject.transform.childCount; i++)
+            {
+                Transform child = avatarObject.transform.GetChild(i);
+                if (child.name.EndsWith("_Instance"))
+                {
+                    return child.gameObject;
+                }
+            }
+            
+            return null;
         }
         
         /// <summary>
@@ -309,6 +438,22 @@ namespace AvatarCostumeAdjustTool
         public static GameObject GetCostumeInstance()
         {
             return costumeInstance;
+        }
+        
+        /// <summary>
+        /// 最後に適用したアバターオブジェクトを取得
+        /// </summary>
+        public static GameObject GetLastAvatarObject()
+        {
+            return lastAvatarObject;
+        }
+        
+        /// <summary>
+        /// 最後に適用した調整設定を取得
+        /// </summary>
+        public static AdjustmentSettings GetLastAdjustmentSettings()
+        {
+            return lastAdjustmentSettings;
         }
     }
 }
