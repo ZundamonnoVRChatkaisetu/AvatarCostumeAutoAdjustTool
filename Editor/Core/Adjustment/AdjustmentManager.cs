@@ -19,6 +19,10 @@ namespace AvatarCostumeAdjustTool
         private static Dictionary<string, Quaternion> originalRotations = new Dictionary<string, Quaternion>();
         private static Dictionary<string, Vector3> originalScales = new Dictionary<string, Vector3>();
         
+        // メッシュバックアップ (バインドポーズの復元用)
+        private static Dictionary<string, Matrix4x4[]> originalBindPoses = new Dictionary<string, Matrix4x4[]>();
+        private static Dictionary<string, BoneWeight[]> originalBoneWeights = new Dictionary<string, BoneWeight[]>();
+
         /// <summary>
         /// 衣装を適用する
         /// </summary>
@@ -50,14 +54,30 @@ namespace AvatarCostumeAdjustTool
             // 元の状態をバックアップ
             BackupOriginalCostumeState(costumeInstance);
             
-            // 調整方法に応じて処理を分岐
-            if (settings.method == "BoneBased")
+            try
             {
-                BoneBasedAdjuster.ApplyAdjustment(avatarObject, costumeInstance, mappingData, settings);
+                // 調整方法に応じて処理を分岐
+                if (settings.method == "BoneBased")
+                {
+                    BoneBasedAdjuster.ApplyAdjustment(avatarObject, costumeInstance, mappingData, settings);
+                }
+                else if (settings.method == "MeshBased")
+                {
+                    MeshBasedAdjuster.ApplyAdjustment(avatarObject, costumeInstance, mappingData, settings);
+                }
+                
+                // 体の部位別調整の適用（全ての部位に適用）
+                ApplyAllBodyPartAdjustments(avatarObject, settings);
             }
-            else if (settings.method == "MeshBased")
+            catch (Exception ex)
             {
-                MeshBasedAdjuster.ApplyAdjustment(avatarObject, costumeInstance, mappingData, settings);
+                Debug.LogError($"衣装適用中にエラーが発生しました: {ex.Message}\n{ex.StackTrace}");
+                
+                // エラー発生時は元の状態に戻す
+                RestoreOriginalCostumeState(costumeInstance);
+                
+                EditorUtility.DisplayDialog("エラー", 
+                    $"衣装適用中にエラーが発生しました。\n{ex.Message}", "OK");
             }
             
             // エディタの更新を要求
@@ -81,6 +101,24 @@ namespace AvatarCostumeAdjustTool
             // エディタの更新を要求
             EditorUtility.SetDirty(avatarObject);
             SceneView.RepaintAll();
+        }
+        
+        /// <summary>
+        /// すべての体の部位別調整を適用する
+        /// </summary>
+        private static void ApplyAllBodyPartAdjustments(GameObject avatarObject, AdjustmentSettings settings)
+        {
+            if (avatarObject == null || costumeInstance == null || settings == null)
+                return;
+            
+            // すべての有効な部位別調整を適用
+            foreach (var kvp in settings.bodyPartAdjustments)
+            {
+                if (kvp.Value.isEnabled)
+                {
+                    BodyPartAdjuster.ApplyAdjustment(avatarObject, costumeInstance, kvp.Key, settings);
+                }
+            }
         }
         
         /// <summary>
@@ -142,6 +180,8 @@ namespace AvatarCostumeAdjustTool
             originalPositions.Clear();
             originalRotations.Clear();
             originalScales.Clear();
+            originalBindPoses.Clear();
+            originalBoneWeights.Clear();
             
             // アバターの子から "_Instance" が付くオブジェクトを検索して削除
             for (int i = avatarObject.transform.childCount - 1; i >= 0; i--)
@@ -164,6 +204,8 @@ namespace AvatarCostumeAdjustTool
             originalPositions.Clear();
             originalRotations.Clear();
             originalScales.Clear();
+            originalBindPoses.Clear();
+            originalBoneWeights.Clear();
             
             // すべてのTransformをバックアップ
             Transform[] transforms = costumeObject.GetComponentsInChildren<Transform>(true);
@@ -175,8 +217,22 @@ namespace AvatarCostumeAdjustTool
                 originalScales[path] = t.localScale;
             }
             
-            // スキンメッシュのバインドポーズもバックアップ（必要に応じて）
-            // ここに実装予定
+            // スキンメッシュのバインドポーズもバックアップ
+            SkinnedMeshRenderer[] renderers = costumeObject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            foreach (var renderer in renderers)
+            {
+                if (renderer != null && renderer.sharedMesh != null)
+                {
+                    string path = GetRelativePath(costumeObject.transform, renderer.transform);
+                    originalBindPoses[path] = renderer.sharedMesh.bindposes.Clone() as Matrix4x4[];
+                    
+                    // ボーンウェイトもバックアップ（読み取り可能な場合のみ）
+                    if (renderer.sharedMesh.isReadable)
+                    {
+                        originalBoneWeights[path] = renderer.sharedMesh.boneWeights.Clone() as BoneWeight[];
+                    }
+                }
+            }
         }
         
         /// <summary>
@@ -202,8 +258,32 @@ namespace AvatarCostumeAdjustTool
                     t.localScale = originalScales[path];
             }
             
-            // スキンメッシュのバインドポーズも元に戻す（必要に応じて）
-            // ここに実装予定
+            // スキンメッシュのバインドポーズも元に戻す
+            SkinnedMeshRenderer[] renderers = costumeObject.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            foreach (var renderer in renderers)
+            {
+                if (renderer != null && renderer.sharedMesh != null)
+                {
+                    string path = GetRelativePath(costumeObject.transform, renderer.transform);
+                    
+                    if (originalBindPoses.ContainsKey(path))
+                    {
+                        // メッシュをコピーして元のバインドポーズを設定
+                        Mesh originalMesh = renderer.sharedMesh;
+                        Mesh restoreMesh = UnityEngine.Object.Instantiate(originalMesh);
+                        restoreMesh.name = originalMesh.name + "_Restored";
+                        restoreMesh.bindposes = originalBindPoses[path];
+                        
+                        // ボーンウェイトを元に戻す（読み取り可能な場合のみ）
+                        if (restoreMesh.isReadable && originalBoneWeights.ContainsKey(path))
+                        {
+                            restoreMesh.boneWeights = originalBoneWeights[path];
+                        }
+                        
+                        renderer.sharedMesh = restoreMesh;
+                    }
+                }
+            }
         }
         
         /// <summary>
@@ -221,6 +301,14 @@ namespace AvatarCostumeAdjustTool
                 return target.name;
                 
             return GetRelativePath(root, target.parent) + "/" + target.name;
+        }
+        
+        /// <summary>
+        /// 衣装インスタンスを取得
+        /// </summary>
+        public static GameObject GetCostumeInstance()
+        {
+            return costumeInstance;
         }
     }
 }
