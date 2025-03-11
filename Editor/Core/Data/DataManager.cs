@@ -350,14 +350,14 @@ namespace AvatarCostumeAdjustTool
     [System.Serializable]
     public class BodyPartReferenceData
     {
-        public List<BodyPart> BodyParts = new List<BodyPart>();
+        public List<BodyPartReference> BodyParts = new List<BodyPartReference>();
     }
 
     /// <summary>
-    /// 身体部位データ
+    /// 身体部位参照データクラス
     /// </summary>
     [System.Serializable]
-    public class BodyPart
+    public class BodyPartReference
     {
         public string Name;                      // 部位名（例: Head, Chest, LeftArm）
         public string[] RelatedBones;            // 関連するボーン名
