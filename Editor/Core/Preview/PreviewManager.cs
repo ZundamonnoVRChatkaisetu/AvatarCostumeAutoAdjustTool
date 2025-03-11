@@ -353,7 +353,7 @@ namespace AvatarCostumeAdjustTool
                     EditorUtils.WithHandlesColor(color, () =>
                     {
                         Handles.matrix = renderer.transform.localToWorldMatrix;
-                        Handles.DrawWireMesh(meshFilter.sharedMesh);
+                        EditorUtils.DrawWireMesh(meshFilter.sharedMesh, Matrix4x4.identity, color);
                     });
                 }
                 else if (renderer is SkinnedMeshRenderer skinnedMesh && skinnedMesh.sharedMesh != null)
@@ -361,7 +361,7 @@ namespace AvatarCostumeAdjustTool
                     EditorUtils.WithHandlesColor(color, () =>
                     {
                         Handles.matrix = renderer.transform.localToWorldMatrix;
-                        Handles.DrawWireMesh(skinnedMesh.sharedMesh);
+                        EditorUtils.DrawWireMesh(skinnedMesh.sharedMesh, Matrix4x4.identity, color);
                     });
                 }
             }
