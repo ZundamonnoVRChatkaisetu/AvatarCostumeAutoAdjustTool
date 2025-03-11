@@ -50,14 +50,26 @@ namespace AvatarCostumeAdjustTool
 
             // タブの初期化
             InitializeTabs();
+            
+            // EditorPrefsから前回のタブを読み込み
+            if (EditorPrefs.HasKey("AvatarCostumeAdjustTool_CurrentTab"))
+            {
+                int savedTab = EditorPrefs.GetInt("AvatarCostumeAdjustTool_CurrentTab");
+                currentTab = (TabType)savedTab;
+            }
         }
 
         // タブ初期化
         private void InitializeTabs()
         {
+            settingsTab = new SettingsTab();
+            settingsTab.LoadSettings(); // 設定の読み込み
+            
             boneMappingTab = new BoneMappingTab();
             adjustmentTab = new AdjustmentTab();
-            settingsTab = new SettingsTab();
+            
+            // 調整タブに設定タブの参照を渡す
+            adjustmentTab.SetSettingsTab(settingsTab);
         }
 
         // GUI描画
@@ -125,22 +137,43 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.BeginHorizontal();
             
             if (GUILayout.Toggle(currentTab == TabType.BoneMapping, "ボーンマッピング", EditorStyles.toolbarButton))
-                currentTab = TabType.BoneMapping;
+                SetCurrentTab(TabType.BoneMapping);
             
             if (GUILayout.Toggle(currentTab == TabType.Adjustment, "調整", EditorStyles.toolbarButton))
-                currentTab = TabType.Adjustment;
+                SetCurrentTab(TabType.Adjustment);
             
             if (GUILayout.Toggle(currentTab == TabType.Settings, "設定", EditorStyles.toolbarButton))
-                currentTab = TabType.Settings;
+                SetCurrentTab(TabType.Settings);
             
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.Space();
+        }
+        
+        // 現在のタブを設定
+        private void SetCurrentTab(TabType tab)
+        {
+            if (currentTab != tab)
+            {
+                currentTab = tab;
+                
+                // EditorPrefsに保存
+                EditorPrefs.SetInt("AvatarCostumeAdjustTool_CurrentTab", (int)currentTab);
+            }
         }
 
         // タブコンテンツ描画
         private void DrawTabContent()
         {
             bool areObjectsSelected = avatarObject != null && costumeObject != null;
+            
+            // 設定タブはオブジェクト選択に関係なく常に表示
+            if (currentTab == TabType.Settings)
+            {
+                scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+                settingsTab.OnGUI();
+                EditorGUILayout.EndScrollView();
+                return;
+            }
             
             if (!areObjectsSelected)
             {
@@ -157,9 +190,6 @@ namespace AvatarCostumeAdjustTool
                     break;
                 case TabType.Adjustment:
                     adjustmentTab.OnGUI(avatarObject, costumeObject);
-                    break;
-                case TabType.Settings:
-                    settingsTab.OnGUI();
                     break;
             }
             
@@ -198,25 +228,37 @@ namespace AvatarCostumeAdjustTool
             // 1. マッピングデータの取得
             var mappingData = boneMappingTab.GetMappingData();
             
-            // 2. 調整設定の取得
+            // 2. 調整設定の取得（設定タブからの設定も適用）
             var adjustmentSettings = adjustmentTab.GetAdjustmentSettings();
             
             // 3. 実際の衣装適用処理
-            AdjustmentManager.ApplyCostume(
-                avatarObject, 
-                costumeObject, 
-                mappingData, 
-                adjustmentSettings
-            );
-            
-            // 4. 調整タブの更新
-            adjustmentTab.OnCostumeApplied();
-            
-            // 5. エディタの更新を強制
-            EditorUtility.SetDirty(avatarObject);
-            AssetDatabase.SaveAssets();
-            
-            Debug.Log("衣装を適用しました！");
+            try
+            {
+                AdjustmentManager.ApplyCostume(
+                    avatarObject, 
+                    costumeObject, 
+                    mappingData, 
+                    adjustmentSettings
+                );
+                
+                // 4. 調整タブの更新
+                adjustmentTab.OnCostumeApplied();
+                
+                // 5. エディタの更新を強制
+                EditorUtility.SetDirty(avatarObject);
+                AssetDatabase.SaveAssets();
+                
+                Debug.Log("衣装を適用しました！");
+                
+                // 適用後、自動的に調整タブに切り替え
+                SetCurrentTab(TabType.Adjustment);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"衣装適用中にエラーが発生しました: {ex.Message}\n{ex.StackTrace}");
+                EditorUtility.DisplayDialog("エラー", 
+                    $"衣装適用中にエラーが発生しました。\n{ex.Message}", "OK");
+            }
         }
     }
 }
