@@ -132,7 +132,7 @@ namespace AvatarCostumeAdjustTool
             if (sliderLabelStyle == null)
             {
                 sliderLabelStyle = new GUIStyle(EditorStyles.label);
-                sliderLabelStyle.width = 120;
+                // GUIStyle.width は存在しないため、実際の使用時に GUILayout.Width() を使用します
             }
         }
         
@@ -165,25 +165,13 @@ namespace AvatarCostumeAdjustTool
                 
                 // 脚設定
                 leftLegScale = 1.0f,
-                rightLegScale = 1.0f,
-                
-                // 部位別詳細設定
-                bodyPartAdjustments = new Dictionary<BodyPart, BodyPartAdjustment>()
+                rightLegScale = 1.0f
             };
             
             // 各体の部位に対して調整設定を初期化
             foreach (BodyPart part in Enum.GetValues(typeof(BodyPart)))
             {
-                adjustmentSettings.bodyPartAdjustments[part] = new BodyPartAdjustment
-                {
-                    scaleX = 1.0f,
-                    scaleY = 1.0f,
-                    scaleZ = 1.0f,
-                    offsetX = 0.0f,
-                    offsetY = 0.0f,
-                    offsetZ = 0.0f,
-                    rotation = Vector3.zero
-                };
+                adjustmentSettings.GetBodyPartAdjustment(part).Reset();
             }
         }
         
@@ -244,7 +232,7 @@ namespace AvatarCostumeAdjustTool
             if (showPreview)
             {
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField("プレビュー透明度", sliderLabelStyle);
+                EditorGUILayout.LabelField("プレビュー透明度", GUILayout.Width(120));
                 previewOpacity = EditorGUILayout.Slider(previewOpacity, 0.1f, 1.0f);
                 EditorGUILayout.EndHorizontal();
                 
@@ -275,7 +263,7 @@ namespace AvatarCostumeAdjustTool
             
             // 全体スケール
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("全体スケール", sliderLabelStyle);
+            EditorGUILayout.LabelField("全体スケール", GUILayout.Width(120));
             adjustmentSettings.globalScale = EditorGUILayout.Slider(adjustmentSettings.globalScale, 0.5f, 1.5f);
             EditorGUILayout.EndHorizontal();
             
@@ -285,17 +273,17 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.LabelField("上半身", subHeaderStyle);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("X オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("X オフセット", GUILayout.Width(120));
             adjustmentSettings.upperBodyOffsetX = EditorGUILayout.Slider(adjustmentSettings.upperBodyOffsetX, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Y オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("Y オフセット", GUILayout.Width(120));
             adjustmentSettings.upperBodyOffsetY = EditorGUILayout.Slider(adjustmentSettings.upperBodyOffsetY, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Z オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("Z オフセット", GUILayout.Width(120));
             adjustmentSettings.upperBodyOffsetZ = EditorGUILayout.Slider(adjustmentSettings.upperBodyOffsetZ, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
@@ -305,17 +293,17 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.LabelField("下半身", subHeaderStyle);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("X オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("X オフセット", GUILayout.Width(120));
             adjustmentSettings.lowerBodyOffsetX = EditorGUILayout.Slider(adjustmentSettings.lowerBodyOffsetX, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Y オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("Y オフセット", GUILayout.Width(120));
             adjustmentSettings.lowerBodyOffsetY = EditorGUILayout.Slider(adjustmentSettings.lowerBodyOffsetY, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Z オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("Z オフセット", GUILayout.Width(120));
             adjustmentSettings.lowerBodyOffsetZ = EditorGUILayout.Slider(adjustmentSettings.lowerBodyOffsetZ, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
@@ -328,7 +316,7 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.LabelField("左腕", subHeaderStyle);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("スケール", sliderLabelStyle, GUILayout.Width(80));
+            EditorGUILayout.LabelField("スケール", GUILayout.Width(80));
             adjustmentSettings.leftArmScale = EditorGUILayout.Slider(adjustmentSettings.leftArmScale, 0.5f, 1.5f);
             EditorGUILayout.EndHorizontal();
             
@@ -338,7 +326,7 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.LabelField("右腕", subHeaderStyle);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("スケール", sliderLabelStyle, GUILayout.Width(80));
+            EditorGUILayout.LabelField("スケール", GUILayout.Width(80));
             adjustmentSettings.rightArmScale = EditorGUILayout.Slider(adjustmentSettings.rightArmScale, 0.5f, 1.5f);
             EditorGUILayout.EndHorizontal();
             
@@ -355,7 +343,7 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.LabelField("左脚", subHeaderStyle);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("スケール", sliderLabelStyle, GUILayout.Width(80));
+            EditorGUILayout.LabelField("スケール", GUILayout.Width(80));
             adjustmentSettings.leftLegScale = EditorGUILayout.Slider(adjustmentSettings.leftLegScale, 0.5f, 1.5f);
             EditorGUILayout.EndHorizontal();
             
@@ -365,7 +353,7 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.LabelField("右脚", subHeaderStyle);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("スケール", sliderLabelStyle, GUILayout.Width(80));
+            EditorGUILayout.LabelField("スケール", GUILayout.Width(80));
             adjustmentSettings.rightLegScale = EditorGUILayout.Slider(adjustmentSettings.rightLegScale, 0.5f, 1.5f);
             EditorGUILayout.EndHorizontal();
             
@@ -387,7 +375,7 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         private void DrawBodyPartAdjustmentSection()
         {
-            if (adjustmentSettings == null || adjustmentSettings.bodyPartAdjustments == null)
+            if (adjustmentSettings == null)
             {
                 return;
             }
@@ -398,30 +386,25 @@ namespace AvatarCostumeAdjustTool
             // 部位選択
             selectedBodyPart = (BodyPart)EditorGUILayout.EnumPopup("調整部位", selectedBodyPart);
             
-            if (!adjustmentSettings.bodyPartAdjustments.ContainsKey(selectedBodyPart))
-            {
-                adjustmentSettings.bodyPartAdjustments[selectedBodyPart] = new BodyPartAdjustment();
-            }
-            
             EditorGUILayout.Space();
             
-            BodyPartAdjustment partAdjustment = adjustmentSettings.bodyPartAdjustments[selectedBodyPart];
+            BodyPartAdjustment partAdjustment = adjustmentSettings.GetBodyPartAdjustment(selectedBodyPart);
             
             // スケール調整
             EditorGUILayout.LabelField("スケール調整", subHeaderStyle);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("X スケール", sliderLabelStyle);
+            EditorGUILayout.LabelField("X スケール", GUILayout.Width(120));
             partAdjustment.scaleX = EditorGUILayout.Slider(partAdjustment.scaleX, 0.5f, 1.5f);
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Y スケール", sliderLabelStyle);
+            EditorGUILayout.LabelField("Y スケール", GUILayout.Width(120));
             partAdjustment.scaleY = EditorGUILayout.Slider(partAdjustment.scaleY, 0.5f, 1.5f);
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Z スケール", sliderLabelStyle);
+            EditorGUILayout.LabelField("Z スケール", GUILayout.Width(120));
             partAdjustment.scaleZ = EditorGUILayout.Slider(partAdjustment.scaleZ, 0.5f, 1.5f);
             EditorGUILayout.EndHorizontal();
             
@@ -439,17 +422,17 @@ namespace AvatarCostumeAdjustTool
             EditorGUILayout.LabelField("位置調整", subHeaderStyle);
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("X オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("X オフセット", GUILayout.Width(120));
             partAdjustment.offsetX = EditorGUILayout.Slider(partAdjustment.offsetX, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Y オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("Y オフセット", GUILayout.Width(120));
             partAdjustment.offsetY = EditorGUILayout.Slider(partAdjustment.offsetY, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Z オフセット", sliderLabelStyle);
+            EditorGUILayout.LabelField("Z オフセット", GUILayout.Width(120));
             partAdjustment.offsetZ = EditorGUILayout.Slider(partAdjustment.offsetZ, -0.1f, 0.1f);
             EditorGUILayout.EndHorizontal();
             
@@ -529,7 +512,7 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         private void ApplyBodyPartAdjustments()
         {
-            if (adjustmentSettings == null || !adjustmentSettings.bodyPartAdjustments.ContainsKey(selectedBodyPart)) return;
+            if (adjustmentSettings == null) return;
             
             // 選択中の部位に対して調整を適用
             // 実装予定
@@ -540,16 +523,10 @@ namespace AvatarCostumeAdjustTool
         /// </summary>
         private void ResetBodyPartAdjustment(BodyPart part)
         {
-            if (adjustmentSettings == null || !adjustmentSettings.bodyPartAdjustments.ContainsKey(part)) return;
+            if (adjustmentSettings == null) return;
             
-            BodyPartAdjustment adjustment = adjustmentSettings.bodyPartAdjustments[part];
-            adjustment.scaleX = 1.0f;
-            adjustment.scaleY = 1.0f;
-            adjustment.scaleZ = 1.0f;
-            adjustment.offsetX = 0.0f;
-            adjustment.offsetY = 0.0f;
-            adjustment.offsetZ = 0.0f;
-            adjustment.rotation = Vector3.zero;
+            BodyPartAdjustment adjustment = adjustmentSettings.GetBodyPartAdjustment(part);
+            adjustment.Reset();
             
             // 変更を適用
             ApplyBodyPartAdjustments();
