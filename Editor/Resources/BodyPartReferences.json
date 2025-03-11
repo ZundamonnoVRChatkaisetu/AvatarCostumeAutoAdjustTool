@@ -1,0 +1,436 @@
+{
+  "BodyParts": [
+    {
+      "Name": "Head",
+      "RelatedBones": ["Head", "Neck"],
+      "DefaultPosition": {
+        "x": 0,
+        "y": 1.6,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.2,
+        "y": 0.25,
+        "z": 0.22
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0,
+          "y": 1.6,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "y": 1.7,
+          "z": 0
+        },
+        {
+          "x": 0,
+          "y": 1.65,
+          "z": 0.1
+        }
+      ]
+    },
+    {
+      "Name": "Chest",
+      "RelatedBones": ["Spine", "Chest", "UpperChest"],
+      "DefaultPosition": {
+        "x": 0,
+        "y": 1.3,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.35,
+        "y": 0.25,
+        "z": 0.2
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0,
+          "y": 1.3,
+          "z": 0
+        },
+        {
+          "x": 0.15,
+          "y": 1.35,
+          "z": 0.05
+        },
+        {
+          "x": -0.15,
+          "y": 1.35,
+          "z": 0.05
+        }
+      ]
+    },
+    {
+      "Name": "Waist",
+      "RelatedBones": ["Spine", "Hips"],
+      "DefaultPosition": {
+        "x": 0,
+        "y": 1.0,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.3,
+        "y": 0.15,
+        "z": 0.15
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0,
+          "y": 1.0,
+          "z": 0
+        },
+        {
+          "x": 0.15,
+          "y": 1.0,
+          "z": 0
+        },
+        {
+          "x": -0.15,
+          "y": 1.0,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "Hip",
+      "RelatedBones": ["Hips", "LeftUpperLeg", "RightUpperLeg"],
+      "DefaultPosition": {
+        "x": 0,
+        "y": 0.85,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.4,
+        "y": 0.15,
+        "z": 0.2
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0,
+          "y": 0.85,
+          "z": 0
+        },
+        {
+          "x": 0.2,
+          "y": 0.85,
+          "z": 0
+        },
+        {
+          "x": -0.2,
+          "y": 0.85,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "LeftShoulder",
+      "RelatedBones": ["LeftShoulder", "LeftUpperArm"],
+      "DefaultPosition": {
+        "x": 0.2,
+        "y": 1.4,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.1,
+        "y": 0.1,
+        "z": 0.1
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0.2,
+          "y": 1.4,
+          "z": 0
+        },
+        {
+          "x": 0.25,
+          "y": 1.4,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "RightShoulder",
+      "RelatedBones": ["RightShoulder", "RightUpperArm"],
+      "DefaultPosition": {
+        "x": -0.2,
+        "y": 1.4,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.1,
+        "y": 0.1,
+        "z": 0.1
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": -0.2,
+          "y": 1.4,
+          "z": 0
+        },
+        {
+          "x": -0.25,
+          "y": 1.4,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "LeftArm",
+      "RelatedBones": ["LeftUpperArm", "LeftLowerArm"],
+      "DefaultPosition": {
+        "x": 0.3,
+        "y": 1.2,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.08,
+        "y": 0.3,
+        "z": 0.08
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0.3,
+          "y": 1.3,
+          "z": 0
+        },
+        {
+          "x": 0.3,
+          "y": 1.1,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "RightArm",
+      "RelatedBones": ["RightUpperArm", "RightLowerArm"],
+      "DefaultPosition": {
+        "x": -0.3,
+        "y": 1.2,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.08,
+        "y": 0.3,
+        "z": 0.08
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": -0.3,
+          "y": 1.3,
+          "z": 0
+        },
+        {
+          "x": -0.3,
+          "y": 1.1,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "LeftHand",
+      "RelatedBones": ["LeftHand"],
+      "DefaultPosition": {
+        "x": 0.3,
+        "y": 0.95,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.08,
+        "y": 0.1,
+        "z": 0.05
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0.3,
+          "y": 0.95,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "RightHand",
+      "RelatedBones": ["RightHand"],
+      "DefaultPosition": {
+        "x": -0.3,
+        "y": 0.95,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.08,
+        "y": 0.1,
+        "z": 0.05
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": -0.3,
+          "y": 0.95,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "LeftLeg",
+      "RelatedBones": ["LeftUpperLeg", "LeftLowerLeg"],
+      "DefaultPosition": {
+        "x": 0.1,
+        "y": 0.6,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.1,
+        "y": 0.4,
+        "z": 0.1
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0.1,
+          "y": 0.8,
+          "z": 0
+        },
+        {
+          "x": 0.1,
+          "y": 0.4,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "RightLeg",
+      "RelatedBones": ["RightUpperLeg", "RightLowerLeg"],
+      "DefaultPosition": {
+        "x": -0.1,
+        "y": 0.6,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.1,
+        "y": 0.4,
+        "z": 0.1
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": -0.1,
+          "y": 0.8,
+          "z": 0
+        },
+        {
+          "x": -0.1,
+          "y": 0.4,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "Name": "LeftFoot",
+      "RelatedBones": ["LeftFoot", "LeftToes"],
+      "DefaultPosition": {
+        "x": 0.1,
+        "y": 0.1,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.08,
+        "y": 0.05,
+        "z": 0.2
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0.1,
+          "y": 0.1,
+          "z": 0
+        },
+        {
+          "x": 0.1,
+          "y": 0.05,
+          "z": 0.1
+        }
+      ]
+    },
+    {
+      "Name": "RightFoot",
+      "RelatedBones": ["RightFoot", "RightToes"],
+      "DefaultPosition": {
+        "x": -0.1,
+        "y": 0.1,
+        "z": 0
+      },
+      "DefaultSize": {
+        "x": 0.08,
+        "y": 0.05,
+        "z": 0.2
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": -0.1,
+          "y": 0.1,
+          "z": 0
+        },
+        {
+          "x": -0.1,
+          "y": 0.05,
+          "z": 0.1
+        }
+      ]
+    },
+    {
+      "Name": "LeftBreast",
+      "RelatedBones": ["Spine", "Chest", "UpperChest"],
+      "DefaultPosition": {
+        "x": 0.08,
+        "y": 1.3,
+        "z": 0.08
+      },
+      "DefaultSize": {
+        "x": 0.08,
+        "y": 0.08,
+        "z": 0.08
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": 0.08,
+          "y": 1.3,
+          "z": 0.08
+        }
+      ]
+    },
+    {
+      "Name": "RightBreast",
+      "RelatedBones": ["Spine", "Chest", "UpperChest"],
+      "DefaultPosition": {
+        "x": -0.08,
+        "y": 1.3,
+        "z": 0.08
+      },
+      "DefaultSize": {
+        "x": 0.08,
+        "y": 0.08,
+        "z": 0.08
+      },
+      "DefaultRotation": 0,
+      "ReferencePoints": [
+        {
+          "x": -0.08,
+          "y": 1.3,
+          "z": 0.08
+        }
+      ]
+    }
+  ]
+}
